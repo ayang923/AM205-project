@@ -282,6 +282,148 @@ def chebyshev_diff_matrix_2d(N):
     return D2, x
 
 
+def chebyshev_diff_matrix_multi_domain(total_points, points_per_segment):
+    """
+    Construct a multi-domain Chebyshev differentiation matrix.
+    
+    Divides the interval [-2, 2] into uniform segments and applies
+    Chebyshev collocation on each subinterval. The number of segments
+    must be odd.
+    
+    Parameters
+    ----------
+    total_points : int
+        Total number of discretization points
+    points_per_segment : int
+        Number of Chebyshev points per segment (including endpoints)
+    
+    Returns
+    -------
+    D : ndarray
+        Global differentiation matrix, shape (total_points, total_points)
+    x : ndarray
+        Global array of all points, shape (total_points,)
+    segment_info : dict
+        Dictionary containing:
+            - 'n_segments': number of segments
+            - 'segment_boundaries': array of segment boundary positions
+            - 'points_per_segment': points per segment
+            - 'segment_indices': list of arrays, each containing global indices for each segment
+    
+    Notes
+    -----
+    - The number of segments = total_points // points_per_segment must be odd
+    - Each segment uses Chebyshev-Gauss-Lobatto points
+    - Boundary points between segments are shared (duplicated in the global array)
+    - Derivatives at boundary points use the derivative from the segment they belong to
+    """
+    # Calculate number of segments
+    n_segments = total_points // points_per_segment
+    
+    # Validate inputs
+    if total_points % points_per_segment != 0:
+        raise ValueError(f"total_points ({total_points}) must be divisible by "
+                        f"points_per_segment ({points_per_segment})")
+    if n_segments % 2 == 0:
+        raise ValueError(f"Number of segments ({n_segments}) must be odd. "
+                        f"Got total_points={total_points}, points_per_segment={points_per_segment}")
+    if points_per_segment < 2:
+        raise ValueError(f"points_per_segment must be at least 2, got {points_per_segment}")
+    
+    # Divide [-2, 2] into uniform segments
+    a, b = -2.0, 2.0
+    segment_boundaries = np.linspace(a, b, n_segments + 1)
+    
+    # Initialize global arrays
+    x_global = np.zeros(total_points)
+    D_global = np.zeros((total_points, total_points))
+    
+    # Track which segment each point belongs to
+    point_to_segment = np.zeros(total_points, dtype=int)
+    segment_indices = []
+    
+    # Process each segment
+    global_idx = 0
+    for seg in range(n_segments):
+        # Segment boundaries
+        seg_a = segment_boundaries[seg]
+        seg_b = segment_boundaries[seg + 1]
+        seg_length = seg_b - seg_a
+        seg_center = (seg_a + seg_b) / 2.0
+        
+        # Create Chebyshev points on [-1, 1] for this segment
+        j = np.arange(points_per_segment)
+        x_cheb_standard = np.cos(np.pi * j / (points_per_segment - 1))
+        
+        # Map to segment [seg_a, seg_b]
+        # Map from [-1, 1] to [seg_a, seg_b]: x_seg = seg_center + (seg_length/2) * x_cheb
+        x_seg = seg_center + (seg_length / 2.0) * x_cheb_standard
+        
+        # Store points in global array
+        seg_start_idx = global_idx
+        for i in range(points_per_segment):
+            x_global[global_idx] = x_seg[i]
+            point_to_segment[global_idx] = seg
+            global_idx += 1
+        seg_end_idx = global_idx
+        
+        segment_indices.append(np.arange(seg_start_idx, seg_end_idx))
+    
+    # Construct local differentiation matrix for each segment
+    # Standard Chebyshev points on [-1, 1] for matrix construction
+    j = np.arange(points_per_segment)
+    x_standard = np.cos(np.pi * j / (points_per_segment - 1))
+    
+    # Build local differentiation matrix (on [-1, 1])
+    D_local = np.zeros((points_per_segment, points_per_segment))
+    c = np.ones(points_per_segment)
+    c[0] = 2.0
+    c[-1] = 2.0
+    
+    for i in range(points_per_segment):
+        for j in range(points_per_segment):
+            if i != j:
+                D_local[i, j] = (c[i] / c[j]) * ((-1)**(i + j)) / (x_standard[i] - x_standard[j])
+            elif i == 0:
+                D_local[i, i] = (2 * (points_per_segment - 1)**2 + 1) / 6.0
+            elif i == points_per_segment - 1:
+                D_local[i, i] = -(2 * (points_per_segment - 1)**2 + 1) / 6.0
+            else:
+                D_local[i, i] = -x_standard[i] / (2 * (1 - x_standard[i]**2))
+    
+    # Scale by segment length (chain rule: d/dx_seg = (2/seg_length) * d/dx_cheb)
+    # where x_seg = seg_center + (seg_length/2) * x_cheb
+    # So d/dx_seg = (2/seg_length) * d/dx_cheb
+    # But we need to account for the mapping, so: d/dx_seg = (2/seg_length) * d/dx_cheb
+    # Actually, if x_seg = seg_center + (seg_length/2) * x_cheb, then:
+    # dx_seg/dx_cheb = seg_length/2, so d/dx_seg = (2/seg_length) * d/dx_cheb
+    
+    # Assemble global matrix
+    for seg in range(n_segments):
+        seg_a = segment_boundaries[seg]
+        seg_b = segment_boundaries[seg + 1]
+        seg_length = seg_b - seg_a
+        scale_factor = 2.0 / seg_length  # Scale for mapping from [-1,1] to [seg_a, seg_b]
+        
+        seg_indices = segment_indices[seg]
+        D_seg_scaled = D_local * scale_factor
+        
+        # Place local matrix into global matrix
+        for i, global_i in enumerate(seg_indices):
+            for j, global_j in enumerate(seg_indices):
+                D_global[global_i, global_j] = D_seg_scaled[i, j]
+    
+    segment_info = {
+        'n_segments': n_segments,
+        'segment_boundaries': segment_boundaries,
+        'points_per_segment': points_per_segment,
+        'segment_indices': segment_indices,
+        'point_to_segment': point_to_segment
+    }
+    
+    return D_global, x_global, segment_info
+
+
 def test_derivatives():
     """Test the Chebyshev differentiation matrix on various functions."""
     print("=" * 70)
@@ -429,6 +571,70 @@ def test_derivatives():
     print(f"{'='*70}")
 
 
+def test_multi_domain():
+    """Test the multi-domain Chebyshev differentiation matrix."""
+    print("=" * 70)
+    print("Testing Multi-Domain Chebyshev Differentiation Matrix")
+    print("=" * 70)
+    
+    total_points = 45  # 5 segments * 9 points per segment
+    points_per_segment = 9
+    
+    print(f"\nTesting with total_points={total_points}, points_per_segment={points_per_segment}")
+    print(f"Number of segments: {total_points // points_per_segment}")
+    
+    D, x, seg_info = chebyshev_diff_matrix_multi_domain(total_points, points_per_segment)
+    
+    print(f"\nGlobal matrix shape: {D.shape}")
+    print(f"Global points shape: {x.shape}")
+    print(f"Number of segments: {seg_info['n_segments']}")
+    print(f"Segment boundaries: {seg_info['segment_boundaries']}")
+    
+    # Test on a simple function
+    print(f"\nTest 1: u(x) = x^2, u'(x) = 2x")
+    u = x**2
+    du_exact = 2 * x
+    du_approx = D @ u
+    error = np.abs(du_approx - du_exact)
+    max_error = np.max(error)
+    print(f"  Max error: {max_error:.2e}")
+    
+    # Check errors in each segment
+    for seg in range(seg_info['n_segments']):
+        seg_indices = seg_info['segment_indices'][seg]
+        seg_error = np.max(error[seg_indices])
+        print(f"  Segment {seg} max error: {seg_error:.2e}")
+    
+    # Test on a smooth function
+    print(f"\nTest 2: u(x) = sin(πx/2), u'(x) = (π/2)cos(πx/2)")
+    u_smooth = np.sin(np.pi * x / 2)
+    du_smooth_exact = (np.pi / 2) * np.cos(np.pi * x / 2)
+    du_smooth_approx = D @ u_smooth
+    error_smooth = np.abs(du_smooth_approx - du_smooth_exact)
+    max_error_smooth = np.max(error_smooth)
+    print(f"  Max error: {max_error_smooth:.2e}")
+    
+    # Check errors in each segment
+    for seg in range(seg_info['n_segments']):
+        seg_indices = seg_info['segment_indices'][seg]
+        seg_error = np.max(error_smooth[seg_indices])
+        print(f"  Segment {seg} max error: {seg_error:.2e}")
+    
+    # Visualize segment structure
+    print(f"\nSegment structure:")
+    for seg in range(seg_info['n_segments']):
+        seg_indices = seg_info['segment_indices'][seg]
+        seg_a = seg_info['segment_boundaries'][seg]
+        seg_b = seg_info['segment_boundaries'][seg + 1]
+        print(f"  Segment {seg}: [{seg_a:.4f}, {seg_b:.4f}], "
+              f"points: {len(seg_indices)}, "
+              f"x range: [{x[seg_indices[0]]:.4f}, {x[seg_indices[-1]]:.4f}]")
+    
+    print(f"\n{'='*70}")
+    print("Test completed!")
+    print(f"{'='*70}")
+
+
 def test_poly_endpoints():
     """Test the polynomial endpoint differentiation matrix."""
     print("=" * 70)
@@ -494,8 +700,13 @@ def test_poly_endpoints():
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) > 1 and sys.argv[1] == "poly":
-        test_poly_endpoints()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "poly":
+            test_poly_endpoints()
+        elif sys.argv[1] == "multi":
+            test_multi_domain()
+        else:
+            test_derivatives()
     else:
         test_derivatives()
 
