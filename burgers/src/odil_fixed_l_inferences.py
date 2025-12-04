@@ -2,7 +2,6 @@ import numpy as np
 from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
-from util.chebyshev_diff import chebyshev_diff_matrix, chebyshev_diff_matrix_poly_endpoints
 
 def refine_array(arr):
     """
@@ -67,37 +66,96 @@ def fixed_l_inference(n_y, l):
     multigrid_results = []
 
     for i, n_y in enumerate(multigrid_resolutions):
-        D, y = chebyshev_diff_matrix(n_y+1)
+        y = np.linspace(-2, 2, n_y+1)
+        dy = 4/n_y
+
         def loss_function(U):
-            return 1/(n_y+1) * np.sum((-l*U + ((1+l)*y + U)*(D@U))[1:-1]**2) + 1/2*((U[-1]-1)**2 + (U[0]+1)**2)
+            Uph = (U[0:-1] + U[1:]) / 2.0
+            yph = (y[0:-1] + y[1:]) / 2.0
+            f = -l*Uph + ((1+l)*yph + Uph)*(U[1:]-U[0:-1])/dy
+
+            return 1/n_y * np.sum(f**2) + 1/2*(U[0]-1)**2 + (U[-1]+1)**2
         
         U0 = -y / 2.0 if i == 0 else refine_array(multigrid_results[i-1])
         result = minimize(loss_function, x0=U0, method='SLSQP', tol=1e-10, options={"maxiter": 10000})
 
         multigrid_results.append(result.x)
-        y_prev = y
 
     return multigrid_results[-1]
 
 if __name__ == "__main__":
-    n_y = 32
-    l = 0.5
+    l = 0.45
+    n_y = 128
+    s = np.linspace(-2, 2, n_y+1)
+    p = 3
+    y = np.sign(s)*np.abs(s)**p
+    dy = y[1:]-y[:-1]
+
     u_num = fixed_l_inference(n_y, l)
+
+    def loss_function(U):
+        Uph = (U[0:-1] + U[1:]) / 2.0
+        yph = (y[0:-1] + y[1:]) / 2.0
+        f = -l*Uph + ((1+l)*yph + Uph)*(U[1:]-U[0:-1])/dy
+
+        # Compute second to fourth finite difference derivatives (central differences)
+        U2 = (U[:-2] - 2*U[1:-1] + U[2:]) / dy**2
+        U3 = (U[2:] - 2*U[1:-1] + U[:-2])       # third derivative using forward/backward differences is less standard; keep it simple
+        U3 = (U[2:] - 2*U[1:-1] + U[:-2]) / dy**2              # get the "second-difference" at midpoints
+        U3 = (U3[1:] - U3[:-1]) / dy                           # third derivative at interior points
+        U4 = (U[:-4] - 4*U[1:-3] + 6*U[2:-2] - 4*U[3:-1] + U[4:]) / dy**4
+
+        reg = 1/n_y*(
+            np.sum(U2[1:-1]**2) +
+            np.sum(U3**2) +
+            np.sum(U4**2)
+        )
+        # Add regularization to the loss (scale factor 1e-4 to not dominate)
+        return 1/n_y * np.sum(f**2) + 1/2*(U[0]-1)**2 + (U[-1]+1)**2 + 1e-4*reg
+        
+    # Reasonable parameters for SLSQP optimizer
+    result = minimize(
+        loss_function, 
+        x0=u_num, 
+        method='L-BFGS-B',
+        tol=1e-10,
+        options={"maxiter": 1000000}
+    )
+    print(result.success)
+    print(result.fun)
+    
+    # Construct exact solution on Chebyshev points for comparison
+    # u_exact = construct_exact_solution(y, l=l)
+    u_num_smooth = result.x
+    def loss_function(U):
+        Uph = (U[0:-1] + U[1:]) / 2.0
+        yph = (y[0:-1] + y[1:]) / 2.0
+        f = -l*Uph + ((1+l)*yph + Uph)*(U[1:]-U[0:-1])/dy
+        plt.plot(yph, f)
+        plt.show()
+        # Add regularization to the loss (scale factor 1e-4 to not dominate)
+        return 1/n_y * np.sum(f**2) + 1/2*((U[0]-1)**2 + (U[-1]+1)**2)
+
+    u_exact = construct_exact_solution(y, l=l)
+    plt.plot(y, u_exact, '--', linewidth=2, markersize=4)
+    plt.plot(y, u_num, 'o-', linewidth=2, markersize=4)
+    plt.show()
+    print(loss_function(u_num))
+
+
     # Plot comparison
     # Plot U and its 1st to 4th derivatives in subplots
-    D_full, y_full = chebyshev_diff_matrix_poly_endpoints(len(u_num))
-
     derivatives = [u_num]
     label_names = ["$U$", "$U'$", "$U''$", "$U'''$", "$U^{(4)}$"]
 
     current = u_num.copy()
     for i in range(4):
-        current = D_full @ current
+        current = np.diff(current)/dy
         derivatives.append(current.copy())
 
     fig, axs = plt.subplots(5, 1, figsize=(10, 14), sharex=True)
     for i, (ax, arr, name) in enumerate(zip(axs, derivatives, label_names)):
-        ax.plot(y_full, arr, '--', linewidth=2, markersize=4)
+        ax.plot(arr, '--', linewidth=2, markersize=4)
         ax.set_ylabel(name, fontsize=13)
         ax.grid(alpha=0.3)
         if i == 0:
