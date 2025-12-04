@@ -2,9 +2,7 @@ import numpy as np
 from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
-from chebyshev_diff_matrix import chebyshev_diff_matrix
-from scipy.interpolate import interpn
-
+from util.chebyshev_diff import chebyshev_diff_matrix, chebyshev_diff_matrix_poly_endpoints
 
 def refine_array(arr):
     """
@@ -64,9 +62,9 @@ def construct_exact_solution(y_mesh, l=0.4):
     return u_exact
 
 if __name__ == "__main__":
-    l = 0.4
+    l = 0.5
 
-    multigrid_resolutions = [3, 5, 9, 17, 33, 65, 129, 257, 513]
+    multigrid_resolutions = [3, 5, 9, 17]
     multigrid_results = []
     for i, n_y in enumerate(multigrid_resolutions):
         D, y = chebyshev_diff_matrix(n_y)
@@ -74,7 +72,7 @@ if __name__ == "__main__":
             return 1/n_y * np.sum((-l*U + ((1+l)*y + U)*(D@U))[1:-1]**2) + 1/2*((U[-1]-1)**2 + (U[0]+1)**2)
         
         U0 = -y / 2.0 if i == 0 else refine_array(multigrid_results[i-1])
-        result = minimize(loss_function, x0=U0, method='SLSQP', tol=1e-8, options={"maxiter": 10000})
+        result = minimize(loss_function, x0=U0, method='SLSQP', tol=1e-10, options={"maxiter": 10000})
 
         multigrid_results.append(result.x)
         y_prev = y
@@ -84,14 +82,25 @@ if __name__ == "__main__":
     u_num = multigrid_results[-1]
 
     # Plot comparison
-    plt.figure(figsize=(10, 6))
-    plt.plot(y, u_num, 'o-', label='Numerical (Chebyshev)', markersize=4, linewidth=2)
-    # plt.plot(y, u_exact, '--', label='Exact', linewidth=2)
-    plt.xlabel('y')
-    plt.ylabel('U(y)')
-    plt.title(f'Burgers Self-Similar Solution (λ={l})')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+    # Plot U and its 1st to 4th derivatives in subplots
+    D_full, y_full = chebyshev_diff_matrix_poly_endpoints(len(u_num))
+
+    derivatives = [u_num]
+    label_names = ["$U$", "$U'$", "$U''$", "$U'''$", "$U^{(4)}$"]
+
+    current = u_num.copy()
+    for i in range(4):
+        current = D_full @ current
+        derivatives.append(current.copy())
+
+    fig, axs = plt.subplots(5, 1, figsize=(10, 14), sharex=True)
+    for i, (ax, arr, name) in enumerate(zip(axs, derivatives, label_names)):
+        ax.plot(y, arr, '--', linewidth=2, markersize=4)
+        ax.set_ylabel(name, fontsize=13)
+        ax.grid(alpha=0.3)
+        if i == 0:
+            ax.set_title(f'Burgers Self-Similar Solution and Derivatives (λ={l})')
+        if i == 4:
+            ax.set_xlabel('y', fontsize=12)
     plt.tight_layout()
     plt.show()
-
