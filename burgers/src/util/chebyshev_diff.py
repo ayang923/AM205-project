@@ -2,20 +2,24 @@
 Chebyshev Differentiation
 
 This module constructs the Chebyshev differentiation matrix for functions
-defined on the interval [-2, 2] using Chebyshev-Gauss-Lobatto points.
+defined on arbitrary intervals using Chebyshev-Gauss-Lobatto points.
 """
 
 import numpy as np
 
 
-def chebyshev_points(N):
+def chebyshev_points(N, a=-2.0, b=2.0):
     """
-    Compute Chebyshev-Gauss-Lobatto points on [-2, 2].
+    Compute Chebyshev-Gauss-Lobatto points on [a, b].
     
     Parameters
     ----------
     N : int
         Number of points (including endpoints). N >= 2.
+    a : float, optional
+        Left endpoint of interval. Default is -2.0.
+    b : float, optional
+        Right endpoint of interval. Default is 2.0.
     
     Returns
     -------
@@ -24,16 +28,22 @@ def chebyshev_points(N):
     """
     if N < 2:
         raise ValueError("N must be at least 2")
+    if a >= b:
+        raise ValueError(f"a ({a}) must be less than b ({b})")
     
     # Chebyshev-Gauss-Lobatto points on [-1, 1]: x_j = cos(pi * j / (N-1))
-    # Map to [-2, 2] by scaling: y = 2*x
     j = np.arange(N)
     x_standard = np.cos(np.pi * j / (N - 1))
-    x = 2 * x_standard  # Map from [-1, 1] to [-2, 2]
+    
+    # Map from [-1, 1] to [a, b]: x = (a+b)/2 + (b-a)/2 * x_standard
+    center = (a + b) / 2.0
+    scale = (b - a) / 2.0
+    x = center + scale * x_standard
+    
     return x
 
 
-def chebyshev_diff_matrix(N):
+def chebyshev_diff_matrix(N, a=-2.0, b=2.0):
     """
     Construct the Chebyshev differentiation matrix D.
     
@@ -44,13 +54,17 @@ def chebyshev_diff_matrix(N):
     ----------
     N : int
         Number of Chebyshev points (including endpoints). N >= 2.
+    a : float, optional
+        Left endpoint of interval. Default is -2.0.
+    b : float, optional
+        Right endpoint of interval. Default is 2.0.
     
     Returns
     -------
     D : ndarray
         Differentiation matrix, shape (N, N)
     x : ndarray
-        Chebyshev points on [-2, 2], shape (N,)
+        Chebyshev points on [a, b], shape (N,)
     
     References
     ----------
@@ -58,9 +72,11 @@ def chebyshev_diff_matrix(N):
     """
     if N < 2:
         raise ValueError("N must be at least 2")
+    if a >= b:
+        raise ValueError(f"a ({a}) must be less than b ({b})")
     
-    # Compute Chebyshev points on [-2, 2]
-    x = chebyshev_points(N)
+    # Compute Chebyshev points on [a, b]
+    x = chebyshev_points(N, a, b)
     
     # Standard Chebyshev points on [-1, 1] for matrix construction
     j = np.arange(N)
@@ -75,7 +91,6 @@ def chebyshev_diff_matrix(N):
     c[-1] = 2.0
     
     # Fill in the differentiation matrix using standard [-1, 1] points
-    # Then scale by 1/2 to account for mapping to [-2, 2]
     for i in range(N):
         for j in range(N):
             if i != j:
@@ -87,9 +102,11 @@ def chebyshev_diff_matrix(N):
             else:
                 D[i, i] = -x_standard[i] / (2 * (1 - x_standard[i]**2))
     
-    # Scale by 1/2 to account for the mapping from [-1, 1] to [-2, 2]
-    # (chain rule: if y = 2x, then d/dy = (1/2) * d/dx)
-    D = D / 2.0
+    # Scale to account for the mapping from [-1, 1] to [a, b]
+    # If x = (a+b)/2 + (b-a)/2 * x_standard, then dx/dx_standard = (b-a)/2
+    # So d/dx = (2/(b-a)) * d/dx_standard
+    scale_factor = 2.0 / (b - a)
+    D = D * scale_factor
     
     return D, x
 
@@ -175,7 +192,7 @@ def polynomial_diff_weights(x, x0, order=1):
     return weights
 
 
-def chebyshev_diff_matrix_poly_endpoints(N, M=6):
+def chebyshev_diff_matrix_poly_endpoints(N, M=6, a=-2.0, b=2.0):
     """
     Construct Chebyshev differentiation matrix with polynomial interpolation
     at endpoints.
@@ -191,13 +208,17 @@ def chebyshev_diff_matrix_poly_endpoints(N, M=6):
     M : int
         Number of endpoint points to use polynomial interpolation for at each boundary.
         Must satisfy 2 <= M <= (N-1)//2. Default is 6.
+    a : float, optional
+        Left endpoint of interval. Default is -2.0.
+    b : float, optional
+        Right endpoint of interval. Default is 2.0.
     
     Returns
     -------
     D : ndarray
         Differentiation matrix, shape (N, N)
     x : ndarray
-        Chebyshev points on [-2, 2], shape (N,)
+        Chebyshev points on [a, b], shape (N,)
     
     Notes
     -----
@@ -211,12 +232,14 @@ def chebyshev_diff_matrix_poly_endpoints(N, M=6):
         raise ValueError("M must be at least 2")
     if 2*M >= N:
         raise ValueError(f"M={M} too large. Need 2*M < N (got N={N})")
+    if a >= b:
+        raise ValueError(f"a ({a}) must be less than b ({b})")
     
     # Get Chebyshev points
-    x = chebyshev_points(N)
+    x = chebyshev_points(N, a, b)
     
     # Get standard Chebyshev differentiation matrix
-    D_standard, _ = chebyshev_diff_matrix(N)
+    D_standard, _ = chebyshev_diff_matrix(N, a, b)
     
     # Create new differentiation matrix
     D = D_standard.copy()
@@ -261,7 +284,7 @@ def chebyshev_diff_matrix_poly_endpoints(N, M=6):
     return D, x
 
 
-def chebyshev_diff_matrix_2d(N):
+def chebyshev_diff_matrix_2d(N, a=-2.0, b=2.0):
     """
     Construct the second-order Chebyshev differentiation matrix D2.
     
@@ -269,24 +292,28 @@ def chebyshev_diff_matrix_2d(N):
     ----------
     N : int
         Number of Chebyshev points (including endpoints). N >= 2.
+    a : float, optional
+        Left endpoint of interval. Default is -2.0.
+    b : float, optional
+        Right endpoint of interval. Default is 2.0.
     
     Returns
     -------
     D2 : ndarray
         Second-order differentiation matrix, shape (N, N)
     x : ndarray
-        Chebyshev points, shape (N,)
+        Chebyshev points on [a, b], shape (N,)
     """
-    D, x = chebyshev_diff_matrix(N)
+    D, x = chebyshev_diff_matrix(N, a, b)
     D2 = D @ D  # Second derivative matrix is D^2
     return D2, x
 
 
-def chebyshev_diff_matrix_multi_domain(total_points, points_per_segment):
+def chebyshev_diff_matrix_multi_domain(total_points, points_per_segment, a=-2.0, b=2.0):
     """
     Construct a multi-domain Chebyshev differentiation matrix.
     
-    Divides the interval [-2, 2] into uniform segments and applies
+    Divides the interval [a, b] into uniform segments and applies
     Chebyshev collocation on each subinterval. The number of segments
     must be odd.
     
@@ -296,6 +323,10 @@ def chebyshev_diff_matrix_multi_domain(total_points, points_per_segment):
         Total number of discretization points
     points_per_segment : int
         Number of Chebyshev points per segment (including endpoints)
+    a : float, optional
+        Left endpoint of interval. Default is -2.0.
+    b : float, optional
+        Right endpoint of interval. Default is 2.0.
     
     Returns
     -------
@@ -329,9 +360,10 @@ def chebyshev_diff_matrix_multi_domain(total_points, points_per_segment):
                         f"Got total_points={total_points}, points_per_segment={points_per_segment}")
     if points_per_segment < 2:
         raise ValueError(f"points_per_segment must be at least 2, got {points_per_segment}")
+    if a >= b:
+        raise ValueError(f"a ({a}) must be less than b ({b})")
     
-    # Divide [-2, 2] into uniform segments
-    a, b = -2.0, 2.0
+    # Divide [a, b] into uniform segments
     segment_boundaries = np.linspace(a, b, n_segments + 1)
     
     # Initialize global arrays
@@ -698,6 +730,69 @@ def test_poly_endpoints():
     print(f"{'='*70}")
 
 
+def test_arbitrary_intervals():
+    """Test that functions work correctly with arbitrary intervals."""
+    print("=" * 70)
+    print("Testing Arbitrary Intervals")
+    print("=" * 70)
+    
+    # Test various intervals
+    test_intervals = [
+        (0.0, 1.0),      # [0, 1]
+        (-1.0, 1.0),     # [-1, 1]
+        (-5.0, 5.0),     # [-5, 5]
+        (0.5, 3.5),      # [0.5, 3.5]
+    ]
+    
+    N = 17
+    
+    for a, b in test_intervals:
+        print(f"\n{'='*70}")
+        print(f"Testing interval [{a}, {b}]")
+        print(f"{'='*70}")
+        
+        # Test chebyshev_points
+        x = chebyshev_points(N, a, b)
+        assert np.allclose(x[0], b), f"First point should be {b}, got {x[0]}"
+        assert np.allclose(x[-1], a), f"Last point should be {a}, got {x[-1]}"
+        print(f"✓ Points correctly span [{a}, {b}]")
+        
+        # Test chebyshev_diff_matrix
+        D, x_d = chebyshev_diff_matrix(N, a, b)
+        assert np.allclose(x_d, x), "Points should match"
+        
+        # Test on u(x) = x, u'(x) = 1
+        u = x
+        du_exact = np.ones_like(x)
+        du_approx = D @ u
+        error = np.max(np.abs(du_approx - du_exact))
+        print(f"  Test u(x)=x: max error = {error:.2e}")
+        assert error < 1e-10, f"Error too large: {error}"
+        
+        # Test on u(x) = x^2, u'(x) = 2x
+        u = x**2
+        du_exact = 2 * x
+        du_approx = D @ u
+        error = np.max(np.abs(du_approx - du_exact))
+        print(f"  Test u(x)=x^2: max error = {error:.2e}")
+        assert error < 1e-10, f"Error too large: {error}"
+        
+        # Test second derivative
+        D2, x_d2 = chebyshev_diff_matrix_2d(N, a, b)
+        u = x**2
+        d2u_exact = 2 * np.ones_like(x)
+        d2u_approx = D2 @ u
+        error = np.max(np.abs(d2u_approx - d2u_exact))
+        print(f"  Test u(x)=x^2, u''(x)=2: max error = {error:.2e}")
+        assert error < 1e-8, f"Error too large: {error}"
+        
+        print(f"  ✓ All tests passed for [{a}, {b}]")
+    
+    print(f"\n{'='*70}")
+    print("All arbitrary interval tests passed!")
+    print(f"{'='*70}")
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
@@ -705,6 +800,8 @@ if __name__ == "__main__":
             test_poly_endpoints()
         elif sys.argv[1] == "multi":
             test_multi_domain()
+        elif sys.argv[1] == "arbitrary":
+            test_arbitrary_intervals()
         else:
             test_derivatives()
     else:
