@@ -1,4 +1,6 @@
+from unicodedata import ucd_3_2_0
 import numpy as np
+from scipy.interpolate import LinearNDInterpolator
 from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
@@ -67,12 +69,21 @@ def construct_loss_function(l, n_y):
     D1, y1 = chebyshev_diff_matrix(n_segment, a=-2, b=0)
     D2, y2 = chebyshev_diff_matrix(n_segment, a=0, b=2)
 
+    y1_msk = (y1 >= -0.3)
+    y2_msk = (y2 <= 0.3)
+
     def loss_function(U):
         U1 = np.flip(U[:n_segment])
         U2 = np.flip(U[n_segment:])
 
         DU1 = D1@U1
         DU2 = D2@U2
+
+        D2U1 = D1@DU1
+        D2U2 = D2@DU2
+
+        D3U1 = D1@D2U1
+        D3U2 = D2@D2U2
     
         residual_1 = -l*U1 + ((1+l)*y1 + U1)*DU1
         residual_2 = -l*U2 + ((1+l)*y2 + U2)*DU2
@@ -82,8 +93,21 @@ def construct_loss_function(l, n_y):
 
         matching = U1[0] - U2[-1]
         matchingD = DU1[0] - DU2[-1]
-
-        return np.sum(residual_1[:-1]**2) + 1/2*bc_1**2 + 1/(n_segment) * np.sum(residual_2[1:]**2) + 1/2*bc_2**2 + 1/2*matching**2 + 1/2*matchingD**2
+        matchingD2 = D2U1[0] - D2U2[-1]
+        matchingD3 = D3U1[0] - D3U2[-1]
+        return (
+            1/(n_segment) * np.sum(residual_1**2)
+            + 1/2 * bc_1**2
+            + 1/(n_segment) * np.sum(residual_2**2)
+            + 1/2 * bc_2**2
+            + 1e-2*matching**2
+            + 1e-5*1/n_y*np.sum(DU1[y1_msk]**2+DU2[y2_msk]**2)
+            + 1e-3*matchingD**2
+            + 1e-7*1/n_y*np.sum(D2U1[y1_msk]**2+DU2[y2_msk]**2)
+            + 1e-7*matchingD2**2
+            + 1e-10*matchingD3**2
+            + 1e-15*1/n_y*np.sum(D3U1[y1_msk]**2+D3U2[y2_msk]**2)
+        )
 
     return loss_function
     
@@ -99,22 +123,33 @@ def fixed_l_inference(n_y, l, tol=1e-20):
         D1, y1 = chebyshev_diff_matrix(n_segment, a=-2, b=0)
         D2, y2 = chebyshev_diff_matrix(n_segment, a=0, b=2)
 
-        U0 = -np.concatenate([y1 / 2.0, y2 / 2.0]) if i == 0 else np.concatenate([refine_array(u_num_lst[-1][:n_segment]), refine_array(u_num_lst[-1][n_segment:])])
+        if i == 0:
+            U0 = -np.concatenate([y1 / 2.0, y2 / 2.0])
+        else:
+            U1_fine = np.interp(np.flip(y1), np.flip(y1_prev), u_num_lst[-1][:n_segment_prev])
+            U2_fine = np.interp(np.flip(y2), np.flip(y2_prev), u_num_lst[-1][n_segment_prev:])
+            U0 = np.concatenate([
+                U1_fine,
+                U2_fine
+            ])
 
         loss_function = construct_loss_function(l, n_y)
-        
-        result = minimize(loss_function, x0=U0, method='SLSQP', tol=tol, options={"maxiter": 10000})
+
+        result = minimize(loss_function, x0=U0, method='SLSQP', tol=tol, options={"maxiter": 200000})
 
         print(result.success)
         print(result.fun)
 
         u_num_lst.append(result.x)
+        y1_prev = y1
+        y2_prev = y2
+        n_segment_prev = n_segment
 
     return u_num_lst[-1], n_segment, (y1, D1, y2, D2)
 
 if __name__ == "__main__":
-    l = 0.49
-    u_num, n_segment,(y1, D1, y2, D2) = fixed_l_inference(64, l, tol=1e-20)
+    l = 0.5
+    u_num, n_segment,(y1, D1, y2, D2) = fixed_l_inference(64, l, tol=1e-10)
 
     y_full = np.concatenate([np.flip(y1), np.flip(y2)])
     u_exact = construct_exact_solution(y_full, l=l)
@@ -136,8 +171,6 @@ if __name__ == "__main__":
     D1, y1 = chebyshev_diff_matrix(n_segment, a=-2, b=0)
     D2, y2 = chebyshev_diff_matrix(n_segment, a=0, b=2)
 
-    u_num = u_exact
-
     derivatives = [u_num]
     label_names = ["$U$", "$U'$", "$U''$", "$U'''$", "$U^{(4)}$"]
 
@@ -151,7 +184,8 @@ if __name__ == "__main__":
 
     fig, axs = plt.subplots(5, 1, figsize=(10, 14), sharex=True)
     for i, (ax, arr, name) in enumerate(zip(axs, derivatives, label_names)):
-        ax.plot(y_full, arr, '--', linewidth=2, markersize=4)
+        ax.plot(y1, np.flip(arr[:n_segment]), '--', linewidth=2, markersize=4)
+        ax.plot(y2, np.flip(arr[n_segment:]), '--', linewidth=2, markersize=4)
         ax.set_ylabel(name, fontsize=13)
         ax.grid(alpha=0.3)
         if i == 0:
