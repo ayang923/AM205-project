@@ -81,7 +81,7 @@ def fixed_l_inference(n_y, l):
 
 if __name__ == "__main__":
     l = 0.5
-    multigrid_resolutions = [4, 8, 16, 32, 64]
+    multigrid_resolutions = [4, 8, 16, 32]
     u_num_lst = []
     for i, n_y in enumerate(multigrid_resolutions):
         n_segment = int(n_y/2)+1
@@ -122,8 +122,8 @@ if __name__ == "__main__":
     u_exact = construct_exact_solution(y_full, l=l)
 
     plt.figure()
-    plt.plot(y_full, u_exact, '--', linewidth=2, markersize=4, label='Exact')
-    plt.plot(y_full, u_num, '-x', linewidth=2, markersize=4, label='Numerical')
+    plt.plot(y_full, np.abs(u_exact - u_num), '--', linewidth=2, markersize=4, label='Error')
+    # plt.plot(y_full, u_num, '-x', linewidth=2, markersize=4, label='Numerical')
     plt.xlabel('y')
     plt.ylabel('U(y)')
     plt.title(f'Burgers Self-Similar Solution (λ={l})')
@@ -132,37 +132,33 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    # plt.plot(y_full, u_exact, '-x', linewidth=2, markersize=4)
-    # # plt.plot(y_full, u_num, 'o-', linewidth=2, markersize=4)
-    # plt.xlabel('y')
-    # plt.ylabel('U(y)')
-    # plt.title(f'Burgers Self-Similar Solution (λ={l})')
-    # plt.legend()
-    # plt.grid(True, alpha=0.3)
-    # plt.show()
 
-    print(loss_function(u_exact))
+    # Plot comparison
+    # Plot U and its 1st to 4th derivatives in subplots
+    D1, y1 = chebyshev_diff_matrix(n_segment, a=-2, b=0)
+    D2, y2 = chebyshev_diff_matrix(n_segment, a=0, b=2)
 
-    # # Plot comparison
-    # # Plot U and its 1st to 4th derivatives in subplots
-    # D_full, y_full = chebyshev_diff_matrix_poly_endpoints(len(u_num))
+    u_num = u_exact
 
-    # derivatives = [u_num]
-    # label_names = ["$U$", "$U'$", "$U''$", "$U'''$", "$U^{(4)}$"]
+    derivatives = [u_num]
+    label_names = ["$U$", "$U'$", "$U''$", "$U'''$", "$U^{(4)}$"]
 
-    # current = u_num.copy()
-    # for i in range(4):
-    #     current = D_full @ current
-    #     derivatives.append(current.copy())
+    U1_current = np.flip(u_num[:n_segment])
+    U2_current = np.flip(u_num[n_segment:])
+    for i in range(4):
+        U1_current = D1 @ U1_current
+        U2_current = D2 @ U2_current
 
-    # fig, axs = plt.subplots(5, 1, figsize=(10, 14), sharex=True)
-    # for i, (ax, arr, name) in enumerate(zip(axs, derivatives, label_names)):
-    #     ax.plot(y_full, arr, '--', linewidth=2, markersize=4)
-    #     ax.set_ylabel(name, fontsize=13)
-    #     ax.grid(alpha=0.3)
-    #     if i == 0:
-    #         ax.set_title(f'Burgers Self-Similar Solution and Derivatives (λ={l})')
-    #     if i == 4:
-    #         ax.set_xlabel('y', fontsize=12)
-    # plt.tight_layout()
-    # plt.show()
+        derivatives.append(np.concatenate([np.flip(U1_current), np.flip(U2_current)]))
+
+    fig, axs = plt.subplots(5, 1, figsize=(10, 14), sharex=True)
+    for i, (ax, arr, name) in enumerate(zip(axs, derivatives, label_names)):
+        ax.plot(y_full, arr, '--', linewidth=2, markersize=4)
+        ax.set_ylabel(name, fontsize=13)
+        ax.grid(alpha=0.3)
+        if i == 0:
+            ax.set_title(f'Burgers Self-Similar Solution and Derivatives (λ={l})')
+        if i == 4:
+            ax.set_xlabel('y', fontsize=12)
+    plt.tight_layout()
+    plt.show()
