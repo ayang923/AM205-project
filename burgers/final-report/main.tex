@@ -1,0 +1,124 @@
+
+
+\documentclass[12pt]{article}
+
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{graphicx}
+\usepackage{stmaryrd}
+
+\usepackage{cite}
+\usepackage{caption}
+\usepackage{url}
+\usepackage{color}\usepackage{placeins}
+\usepackage{svg}
+
+\usepackage{accents}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{mathtools}
+\usepackage{subcaption}
+\usepackage{multirow}
+\usepackage{bbm}
+\usepackage{epstopdf}
+\usepackage{graphicx}
+\usepackage{bm}
+\usepackage{enumerate}
+\usepackage{booktabs}
+\usepackage[normalem]{ulem}
+
+\theoremstyle{definition}\newtheorem{lemma}{Lemma}
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+\newtheorem{example}{Example}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand\Tstrut{\rule{0ex}{2.7ex}}         % = `top' strut
+\newcommand\Bstrut{\rule[-1.3ex]{0pt}{0pt}}   % = `bottom' strut
+\newcommand\Strut{\rule{0ex}{0ex}}         % = `top' strut
+\newcommand\e{\textrm{e}}
+\newcommand\m{\textrm{m}}
+\newcommand\bt{\textrm{b}}
+
+
+
+\renewcommand{\i}{{\mathrm{i}}}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator\supp{supp}
+\DeclareMathOperator\erfc{erfc}
+
+\algdef{SE}{Begin}{End}{\textbf{begin}}{\textbf{end}}
+
+\topmargin -0.7in 
+\oddsidemargin -0.25in 
+\textheight 9.2in 
+\textwidth 7.0in 
+
+\title{Solving the Self-Similar Burgers Equation 
+via Chebyshev Collocation and Gradient-Based Optimization}
+
+\author{Allen Yang}
+
+\begin{document}
+\maketitle
+\noindent\textit{Textbook Chapter}: Chapter 10, Boundary Value Problems for ODEs;\\
+\textit{Contribution of the Authors}: Worked by myself;\\
+\textit{Use of AI tools}: I used AI tools to help with code development, generating ideas, and writing the final report;\\
+\textit{Other Sources}: I consulted with Prof. Koumoutsakos to discuss approaches for the problem of inferring the parameter $\lambda$.
+\newpage
+\section{\label{sec:introduction}Introduction}
+Finite time self-similar blowups are a fundamental phenomenon in the study of nonlinear partial differential equations, especially in the context of fluid dynamics and nonlinear evolution equations such as the Navier-Stokes equations. A \textit{blowup} refers to the formation of a singularity in finite time, where the solution (or its derivatives) becomes unbounded as some critical time is approached.
+
+In a \textit{self-similar blowup}, the solution near the singularity exhibits a structure that is invariant under a specific scaling of space and time. 
+That is, as the singularity is approached, the solution can often be represented in terms of a single similarity variable—a specific combination of space and time.
+This allows one to seek solutions of the PDE in a reduced form, often involving similarity variables, which convert the original problem into an ordinary differential equation (ODE) or a simpler PDE.
+
+One of the simplest PDEs which exhibits self-similar blowups is the inviscid Burgers equation,
+\begin{equation}
+u_t + u u_x = 0,
+\end{equation}
+in which smooth initial conditions can develop a singularity in finite time. Taking the local self-similar ansatz
+\begin{equation}\label{eq:self-similar-ansatz}
+    u(x, t) = (1-t)^\lambda U(y(x, t)), \quad y(x, t) = \frac{x}{(1-t)^{1+\lambda}},
+\end{equation}
+the self-similar Burgers equation becomes
+\begin{equation}
+    -\lambda U + ((1+\lambda)y +U)d_yU = 0,
+\end{equation}
+which is a first order nonlinear ODE for $U(y)$. If we additionally impose $U$ to be odd and add the boundary conditions $U(-2) = 1$ and $U(2) = -1$, then the analytical self-similar Burgers' solution is given (implictly) by:
+\begin{equation}\label{eq:solution}
+    y = -U - CU^{1+\tfrac{1}{\lambda}}.
+\end{equation}
+Thus, for this project, we consider the boundary value problem
+\begin{equation}\label{eq:bvp}
+    \begin{cases}
+        -\lambda U + ((1+\lambda)y +U)d_yU = 0, \quad y \in (-2, 2), \\
+        U(-2) = 1, \quad U(2) = -1.
+    \end{cases}
+\end{equation}
+To understand blowup in this context, notice that the spatial derivative transforms as $\partial_x u = (1-t)^{-\lambda} d_y U$ under the self-similar ansatz. This means if $d_y U$ is nontrivial, then as $t \to 1^-$, the factor $(1-t)^{-\lambda}$ diverges for any $\lambda > 0$, leading to a blowup in the gradient of $u(x, t)$. At the initial time $t=0$, the similarity variable reduces to $y(x, 0) = x$, so if $U(y)$ is smooth within $y \in (-2, 2)$, then $u(x, 0)$ is smooth for $x \in (-2, 2)$. As time advances towards $t = 1$, the region described by the fixed ``inner region'' $y \in [-2, 2]$ corresponds to an increasingly small neighborhood around $x = 0$, capturing precisely where the gradient becomes unbounded. Thus, the primary objective is to find a smooth solution $U(y)$ to the boundary value problem~\eqref{eq:bvp}, which allows us to clearly demonstrate how smooth initial conditions can evolve into a finite-time singularity. 
+We focus on the inviscid Burgers equation due to its well-understood analytical properties, particularly the existence of an explicit self-similar solution~\eqref{eq:solution}, as well as the discrete set of parameter values $\lambda$ admit smooth solutions to the boundary value problem, given by
+\begin{equation}
+    \lambda = \frac{1}{2(n+1)}, \qquad n = 0, 1, 2, \ldots.
+\end{equation}
+For other $\lambda$, the solutions demonstrate nonsmooth behavior at $y=0$.
+
+Related work done in~\cite{wang2023asymptotic} demonstrates the application of Physics-Informed Neural Networks (PINNs) to the self-similar Burgers equation problem. In their approach, they parameterize the solution $U(y)$ using a neural network and incorporate the PDE residual from~\eqref{eq:bvp} directly into the loss function. The network is trained to minimize a weighted combination of the PDE residual, boundary conditions, and additional regularization terms. Both their method and the approach used in this project rely on automatic differentiation for efficient evaluation of derivatives and gradients. However, while~\cite{wang2023asymptotic} uses neural networks as the ansatz space, this project employs a variation of the Chebyshev collocation method (cf.~\cite{driscoll2016rectangular}), which can achieve spectral accuracy for smooth solutions, also using automatic differentiation for gradient-based optimization. 
+
+The remainder of this report is organized as follows. We first introduce the piecewise Chebyshev collocation method used to discretize the boundary value problem~\eqref{eq:bvp}, along with the automatic differentiation framework that enables efficient gradient computation for optimization. We then present numerical results for the case where $\lambda$ is fixed and known, demonstrating effectiveness of our spectral method approach. Finally, we extend the method to the more challenging problem of inferring the parameter $\lambda$ simultaneously with the solution $U(y)$, where we solve a coupled optimization problem that determines both the solution profile and the self-similar scaling parameter.
+
+\section{\label{sec:collocation}``Piecewise'' Chebyshev collocation}
+
+\begin{example}[Comparison of different Differentiation methods]
+    
+\end{example}
+
+\bibliographystyle{abbrv}
+\bibliography{references}
+
+
+\end{document}
+

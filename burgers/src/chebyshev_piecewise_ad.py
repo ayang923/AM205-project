@@ -24,7 +24,6 @@ from scipy.optimize import fsolve, root
 import matplotlib.pyplot as plt
 from util.chebyshev_diff import chebyshev_diff_matrix, chebyshev_diff_matrix_poly_endpoints
 
-import jax
 import jax.numpy as jnp
 from jax import grad, jit, value_and_grad, jacfwd
 from jaxopt import LBFGS, ScipyMinimize
@@ -435,17 +434,17 @@ def fixed_l_inference_system(n_y, l, tol=1e-14, method='hybr', maxiter=100):
     return u_num_lst[-1], n_segment, (y1, D1, y2, D2)
 
 if __name__ == "__main__":
-    l = 0.4
+    l = 0.5
     
     # Choose method: 'loss' for loss-based optimization or 'system' for system-based
     method = 'system'  # or 'loss'
     
     if method == 'system':
         print("Using system-based optimization (F(U) = 0)")
-        u_num, n_segment, (y1, D1, y2, D2) = fixed_l_inference_system(64, l, tol=1e-14, method='hybr')
+        u_num, n_segment, (y1, D1, y2, D2) = fixed_l_inference_system(64, l, tol=1e-10, method='hybr')
     else:
         print("Using loss-based optimization")
-        u_num, n_segment, (y1, D1, y2, D2) = fixed_l_inference_ad(64, l, tol=1e-14, optimizer='lbfgs')
+        u_num, n_segment, (y1, D1, y2, D2) = fixed_l_inference_ad(64, l, tol=1e-8, optimizer='lbfgs')
 
     y_full = np.concatenate([np.flip(y1), np.flip(y2)])
     u_exact = construct_exact_solution(y_full, l=l)
