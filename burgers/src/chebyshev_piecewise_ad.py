@@ -24,68 +24,14 @@ from scipy.optimize import fsolve, root
 import matplotlib.pyplot as plt
 from util.chebyshev_diff import chebyshev_diff_matrix, chebyshev_diff_matrix_poly_endpoints
 
-# Try to import JAX, fall back gracefully if not available
-try:
-    import jax
-    import jax.numpy as jnp
-    from jax import grad, jit, value_and_grad, jacfwd
-    HAS_JAX = True
-except ImportError:
-    HAS_JAX = False
-    raise ImportError(
-        "JAX is required for automatic differentiation. "
-        "Install it with: pip install jax jaxlib"
-    )
-
-# Try to use JAX optimizers, fall back to scipy if not available
-try:
-    from jaxopt import LBFGS, ScipyMinimize
-    HAS_JAXOPT = True
-except ImportError:
-    HAS_JAXOPT = False
-    from scipy.optimize import minimize
+import jax
+import jax.numpy as jnp
+from jax import grad, jit, value_and_grad, jacfwd
+from jaxopt import LBFGS, ScipyMinimize
+from scipy.optimize import minimize
 
 def exact_solution_zero(U, y, l=0.4):
     return -U-U**(1+1/l)-y
-
-def refine_array(arr):
-    """
-    Refine an array by a factor of 2 by inserting averages between adjacent points.
-    
-    For an input array of length N, returns an array of length 2N-1 where:
-    - Original points are preserved
-    - New points are inserted as averages of adjacent original points
-    
-    Parameters
-    ----------
-    arr : ndarray
-        Input array of values
-    
-    Returns
-    -------
-    refined : ndarray
-        Refined array with 2N-1 points
-    
-    Examples
-    --------
-    >>> refine_array([1, 3, 5])
-    array([1., 2., 3., 4., 5.])
-    """
-    arr = np.asarray(arr)
-    if arr.size < 2:
-        return arr
-    
-    # Create output array with 2N-1 points
-    n = arr.size
-    refined = np.zeros(2 * n - 1)
-    
-    # Keep original points at even indices
-    refined[::2] = arr
-    
-    # Insert averages at odd indices
-    refined[1::2] = (arr[:-1] + arr[1:]) / 2.0
-    
-    return refined
 
 def construct_exact_solution(y_mesh, l=0.4):
     # Constructs exact solution
@@ -324,7 +270,7 @@ def fixed_l_inference_ad(n_y, l, tol=1e-20, optimizer='lbfgs', maxiter=200000):
         loss_and_grad = value_and_grad(loss_function)
         
         # Optimize using gradient-based method
-        if HAS_JAXOPT and optimizer == 'lbfgs':
+        if optimizer == 'lbfgs':
             # Use JAXOpt L-BFGS-B
             solver = LBFGS(fun=loss_function, maxiter=maxiter, tol=tol)
             U0_jax = jnp.array(U0)
@@ -332,7 +278,7 @@ def fixed_l_inference_ad(n_y, l, tol=1e-20, optimizer='lbfgs', maxiter=200000):
             u_num = np.array(result.params)
             loss_value = float(loss_function(result.params))
             success = True
-        elif HAS_JAXOPT and optimizer == 'bfgs':
+        elif optimizer == 'bfgs':
             # Use JAXOpt ScipyMinimize wrapper
             solver = ScipyMinimize(fun=loss_function, method='BFGS', 
                                   options={'maxiter': maxiter, 'gtol': tol})
