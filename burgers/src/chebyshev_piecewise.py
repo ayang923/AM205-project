@@ -61,28 +61,11 @@ def construct_exact_solution(y_mesh, l=0.4):
 
     return u_exact
 
-def fixed_l_inference(n_y, l):
+def fixed_l_inference(n_y, l, tol=1e-20):
     num_multigrid_levels = int(np.floor(np.log2(n_y)))
     multigrid_resolutions = [2**i for i in range(1, num_multigrid_levels+1)]
-    multigrid_results = []
-
-    for i, n_y in enumerate(multigrid_resolutions):
-        D, y = chebyshev_diff_matrix(n_y+1)
-        def loss_function(U):
-            return 1/(n_y+1) * np.sum((-l*U + ((1+l)*y + U)*(D@U))[1:-1]**2) + 1/2*((U[-1]-1)**2 + (U[0]+1)**2)
-        
-        U0 = -y / 2.0 if i == 0 else refine_array(multigrid_results[i-1])
-        result = minimize(loss_function, x0=U0, method='SLSQP', tol=1e-10, options={"maxiter": 10000})
-
-        multigrid_results.append(result.x)
-        y_prev = y
-
-    return multigrid_results[-1]
-
-if __name__ == "__main__":
-    l = 0.5
-    multigrid_resolutions = [4, 8, 16, 32]
     u_num_lst = []
+
     for i, n_y in enumerate(multigrid_resolutions):
         n_segment = int(n_y/2)+1
         
@@ -105,18 +88,22 @@ if __name__ == "__main__":
             matching = U1[0] - U2[-1]
             matchingD = DU1[0] - DU2[-1]
 
-            return 1/(n_segment) * np.sum(residual_1[:-1]**2) + 1/2*bc_1**2 + 1/(n_segment) * np.sum(residual_2[1:]**2) + 1/2*bc_2**2 + 1/2*matching**2 + 1/2*matchingD**2
+            return np.sum(residual_1[:-1]**2) + 1/2*bc_1**2 + 1/(n_segment) * np.sum(residual_2[1:]**2) + 1/2*bc_2**2 + 1/2*matching**2 + 1/2*matchingD**2
         
         U0 = -np.concatenate([y1 / 2.0, y2 / 2.0]) if i == 0 else np.concatenate([refine_array(u_num_lst[-1][:n_segment]), refine_array(u_num_lst[-1][n_segment:])])
 
-        result = minimize(loss_function, x0=U0, method='SLSQP', tol=1e-10, options={"maxiter": 10000})
+        result = minimize(loss_function, x0=U0, method='SLSQP', tol=tol, options={"maxiter": 10000})
 
         print(result.success)
         print(result.fun)
 
         u_num_lst.append(result.x)
 
-    u_num = u_num_lst[-1]
+    return u_num_lst[-1], n_segment, (y1, D1, y2, D2)
+
+if __name__ == "__main__":
+    l = 0.49
+    u_num, n_segment,(y1, D1, y2, D2) = fixed_l_inference(64, l, tol=1e-20)
 
     y_full = np.concatenate([np.flip(y1), np.flip(y2)])
     u_exact = construct_exact_solution(y_full, l=l)
