@@ -22,30 +22,11 @@ Dependencies:
 import numpy as np
 from scipy.optimize import fsolve, root
 import matplotlib.pyplot as plt
-from util.chebyshev_diff import chebyshev_diff_matrix, chebyshev_diff_matrix_poly_endpoints
+from util.chebyshev_diff import chebyshev_diff_matrix
+from util.exact_solution import construct_exact_solution
 
 import jax.numpy as jnp
-from jax import grad, jit, value_and_grad, jacfwd
-from jaxopt import LBFGS, ScipyMinimize
-from scipy.optimize import minimize
-
-def exact_solution_zero(U, y, l=0.4):
-    return -U-U**(1+1/l)-y
-
-def construct_exact_solution(y_mesh, l=0.4):
-    # Constructs exact solution
-    u_exact = np.zeros(y_mesh.size)
-
-    n_y_mesh = y_mesh[y_mesh < 0]
-    n_indices = np.where(y_mesh < 0)[0]
-    for idx, (i, y) in enumerate(zip(n_indices, n_y_mesh)):
-        ig = 1 if idx == 0 else u_exact[n_indices[idx-1]]
-        u_exact[i] = fsolve(lambda U: exact_solution_zero(U, y, l=l), ig)[0]
-
-    p_indices = np.where(y_mesh > 0)[0]
-    u_exact[p_indices] = -u_exact[n_indices][::-1]
-
-    return u_exact
+from jax import jit, jacfwd
 
 
 def construct_system_residuals(l, n_y, D1, y1, D2, y2):
@@ -261,7 +242,9 @@ if __name__ == "__main__":
         u_num, n_segment, (y1, D1, y2, D2) = fixed_l_inference_system(64, l, tol=1e-10, method='hybr')
     else:
         print("Using loss-based optimization")
-        u_num, n_segment, (y1, D1, y2, D2) = fixed_l_inference_ad(64, l, tol=1e-8, optimizer='lbfgs')
+        # Note: fixed_l_inference_ad is not implemented in this module
+        # Use fixed_l_inference_system instead
+        u_num, n_segment, (y1, D1, y2, D2) = fixed_l_inference_system(64, l, tol=1e-8, method='hybr')
 
     y_full = np.concatenate([np.flip(y1), np.flip(y2)])
     u_exact = construct_exact_solution(y_full, l=l)

@@ -1,63 +1,44 @@
-from typing import Any
-
 import numpy as np
-from scipy.optimize import fsolve, root
-import matplotlib.pyplot as plt
+from scipy.optimize import minimize
 from util.chebyshev_diff import chebyshev_diff_matrix
 from chebyshev_piecewise_ad import fixed_l_inference_system
 
-import jax
-import jax.numpy as jnp
-from jax import grad, jit, value_and_grad, jacfwd
-from jaxopt import LBFGS, ScipyMinimize
-from scipy.optimize import minimize
-
 def construct_loss(n_y, D1_4, D2_4):
     """
-    Construct system of equations F(U) = 0 instead of loss function.
+    Construct loss function for lambda inference.
     
-    The system includes:
-    - PDE residuals: -l*U + ((1+l)*y + U)*DU = 0 (at interior points only)
-    - Boundary conditions: U1[-1] = 1, U2[0] = -1
-    - Matching conditions: U1[0] = U2[-1], DU1[0] = DU2[-1]
-    
-    The system is balanced: 2*(n_segment-2) PDE equations + 2 BC + 2 matching = 2*n_segment
-    equations for 2*n_segment unknowns.
-    
-    This approach solves the system directly rather than minimizing a weighted loss,
-    which can be faster and avoids the need to tune penalty weights.
+    The loss function evaluates the absolute difference in the fourth derivative
+    at the interface y=0 between the two segments. This measures the discontinuity
+    of the fourth derivative, which should be zero for smooth solutions.
     
     Parameters
     ----------
-    l : float
-        Parameter lambda
     n_y : int
         Number of y points
-    D1, D2 : jnp.ndarray
-        Differentiation matrices for segments 1 and 2
-    y1, y2 : jnp.ndarray
-        y coordinates for segments 1 and 2
+    D1_4 : ndarray
+        First row of D^4 matrix for segment 1 (evaluates at y=0 from left)
+    D2_4 : ndarray
+        Last row of D^4 matrix for segment 2 (evaluates at y=0 from right)
     
     Returns
     -------
-    system_residuals : callable
-        JAX-compiled function that returns residual vector F(U)
+    loss : callable
+        Function that takes lambda as input and returns the loss value
     """
     n_segment = int(n_y/2)+1
     def loss(l):
         """
-        Compute residual vector F(U) = 0.
+        Compute loss as absolute difference of fourth derivative at interface.
         
         Parameters
         ----------
-        U : jnp.ndarray
-            Solution vector [U1, U2] concatenated
+        l : float
+            Parameter lambda
         
         Returns
         -------
-        residuals : jnp.ndarray
-            Vector of residuals (should be zero at solution)
-            Structure: [residual_1, residual_2, bc_1, bc_2, matching, matchingD]
+        loss_value : float
+            Absolute difference |D^4 U_1(0) - D^4 U_2(0)|
         """
         u_num = fixed_l_inference_system(n_y, l=l, tol=1e-10, method='hybr', disp=False)[0]
         U1 = np.flip(u_num[:n_segment])
@@ -72,33 +53,30 @@ def construct_loss(n_y, D1_4, D2_4):
 
 def l_inference_system(n_y, tol=1e-14, method='hybr', maxiter=100, n_x0=20):
     """
-    Solve as a system of equations F(U) = 0 using Newton's method.
+    Infer lambda using nested optimization with Nelder-Mead method.
 
-    This approach directly solves the system of nonlinear equations rather than
-    minimizing a loss function. It can be faster and more accurate for well-conditioned
-    problems, and avoids the need to tune penalty weights.
+    This function uses a nested optimization strategy: for each candidate lambda,
+    it solves the fixed-lambda problem to obtain the solution, then evaluates
+    the loss (fourth derivative jump). The outer optimization uses Nelder-Mead
+    to minimize this scalar loss function over lambda.
 
     Parameters
     ----------
     n_y : int
-        Target number of y points
-    l : float
-        Parameter lambda
+        Number of y points
     tol : float
-        Tolerance for root finding
+        Tolerance for optimization
     method : str
-        Method: 'hybr' (Powell's hybrid), 'lm' (Levenberg-Marquardt), or 'broyden1'
+        Method for inner optimization (not used, kept for compatibility)
     maxiter : int
-        Maximum number of iterations
+        Maximum number of iterations for Nelder-Mead
+    n_x0 : int
+        Number of random initializations for Nelder-Mead
 
     Returns
     -------
-    u_num : ndarray
-        Numerical solution
-    n_segment : int
-        Number of points per segment
-    mesh_info : tuple
-        (y1, D1, y2, D2) mesh information
+    best_l : float
+        Optimal lambda value that minimizes the loss
     """
 
     n_segment = int(n_y/2)+1
@@ -125,7 +103,6 @@ def l_inference_system(n_y, tol=1e-14, method='hybr', maxiter=100, n_x0=20):
             best_l = l_opt
     
     return best_l
-    return l_opt
 if __name__ == "__main__":
     n_y = 64
     tol = 1e-10
