@@ -108,8 +108,7 @@ For other $\lambda$, the solutions demonstrate nonsmooth behavior at $y=0$.
 
 Related work done in~\cite{wang2023asymptotic} demonstrates the application of Physics-Informed Neural Networks (PINNs) to the self-similar Burgers equation problem. In their approach, they parameterize the solution $U(y)$ using a neural network and incorporate the PDE residual from~\eqref{eq:bvp} directly into the loss function. The network is trained to minimize a weighted combination of the PDE residual, boundary conditions, and additional regularization terms. Both their method and the approach used in this project rely on automatic differentiation for efficient evaluation of derivatives and gradients. However, while~\cite{wang2023asymptotic} uses neural networks as the ansatz space, this project employs a variation of the Chebyshev collocation method (cf.~\cite{driscoll2016rectangular}), which can achieve spectral accuracy for smooth solutions, also using automatic differentiation for gradient-based optimization. 
 
-The remainder of this report is organized as follows. We first introduce the piecewise Chebyshev collocation method used to discretize the boundary value problem~\eqref{eq:bvp}, along with comparison to other differentiation methods. We then present numerical results for the case where $\lambda$ is fixed and known, demonstrating effectiveness of our spectral method approach. Finally, we extend the method to the more challenging problem of inferring the parameter $\lambda$ simultaneously with the solution $U(y)$, where we solve a coupled optimization problem that determines both the solution profile and the self-similar scaling parameter.
-
+The remainder of this report is organized as follows. Section~\ref{sec:fixed_l} introduces the localized Chebyshev collocation method used to discretize the boundary value problem~\eqref{eq:bvp} and presents numerical experiments that demonstrate the accuracy and efficiency of this spectral discretization for fixed, known values of $\lambda$. In Section~\ref{sec:inference}, we turn to the more challenging problem of inferring the parameter $\lambda$ for which the ODE~\eqref{eq:bvp} admits a smooth solution $U$, and we formulate and solve the resulting coupled optimization problem. Finally, Section~\ref{sec:conclusions} summarizes the key findings of the project and outlines furture directions.
 
 \section{\label{sec:fixed_l}Solving for fixed $\lambda$}
 \subsection{Localized Chebyshev collocation}\label{subsec:collocation}
@@ -182,8 +181,14 @@ In this section, we present the effectiveness of the proposed method for solving
 The derivative of the exact solution are computed via the spectral differentiation method with the localized Chebyshev nodes described in Seciton~\ref{subsec:collocation} using the finer resolution $n_y = 128$. In view of the rapid convergence of spectral differentiation for smooth functions, the approximation error becomes negligible relative to the error for the coarser resolution $n_y = 64$.
 Finally, we optimize to a tolerance of $10^{-9}$ and use multigrid levels $n_y = 2, 4, 8, 16,$ and $32$ for constructing initial guesses via piecewise linear interpolation.
 
+\begin{remark}\label{rmk:n_y-selection}
+    We found that choosing $n_y = 64$ consistently produced the most accurate results across the first four derivatives. Smaller values of $n_y$ were unable to adequately resolve the solution, while larger values led to differentiation matrices with prohibitively large condition numbers. For these reasons, all numerical experiments in this report use the choice $n_y = 64$.
+\end{remark}
+
 In both cases, we observe that the numerical solution is in good agreement with the exact solution. For the case $\lambda = 0.4$, we observe an absolute $\ell_\infty$ error of $2.1 \times 10^{-7}$ and a relative $\ell_2$ error of $1.2 \times 10^{-7}$, while for the case $\lambda = 0.5$, we observe an absolute $\ell_\infty$ error of $1.7 \times 10^{-7}$ and a relative $\ell_2$ error of $1.1 \times 10^{-7}$. The solution $U(y)$ itself is smooth and well-captured, with the numerical method accurately reproducing the odd symmetry and boundary conditions $U(-2) = 1$ and $U(2) = -1$. The interface conditions at $y = 0$—requiring continuity of both the solution and its first derivative—are also successfully recovered through the system formulation, as evidenced by the smooth transition visible in the plots. 
-Although the numerical higher order derivatives (particularly the third and fourth) show instabilities near the boundaries, the method nevertheless resolves the key features distinguishing the two solutions: the cusp at the origin when $\lambda = 0.4$ and the smooth profile for $\lambda = 0.5$, achieving accuracies comparable to the PINN-based method reported in~\cite{wang2023asymptotic}. The results demonstrate that the piecewise Chebyshev collocation method, combined with gradient-based optimization, provides an effective and accurate approach for solving the boundary value problem~\eqref{eq:bvp}, even in the presence of non-smooth behavior at the origin. The method successfully handles both smooth and non-smooth cases, with the natural clustering of Chebyshev points near the origin ensuring adequate resolution where it is most needed.
+Although the numerical higher order derivatives (particularly the third and fourth) show instabilities near the boundaries, the method nevertheless resolves the key features distinguishing the two solutions: the cusp at the origin when $\lambda = 0.4$ and the smooth profile for $\lambda = 0.5$, achieving accuracies comparable to the PINN-based method reported in~\cite{wang2023asymptotic}. Further, the multigrid strategy employed for constructing initial guesses demonstrates efficient convergence behavior as shown in Table~\ref{tab:iterations}, typically requiring between 4 and 35 Newton iterations per level. Notably, the iteration count does not grow dramatically with increasing resolution, indicating that the piecewise linear interpolation between grid levels provides high-quality initial guesses that significantly accelerate convergence. We also note that in general, the smooth case ($\lambda = 0.5$) generally requires fewer iterations at intermediate levels compared to the non-smooth case ($\lambda = 0.4$).
+
+Overall, the results demonstrate that the piecewise Chebyshev collocation method, combined with gradient-based optimization, provides an effective and accurate approach for solving the boundary value problem~\eqref{eq:bvp}, even in the presence of non-smooth behavior at the origin. The method successfully handles both smooth and non-smooth cases, with the natural clustering of Chebyshev points near the origin ensuring adequate resolution where it is most needed.
 
 \begin{figure}[tbhp]
     \centering
@@ -192,26 +197,119 @@ Although the numerical higher order derivatives (particularly the third and four
     \label{fig:fixed_l}
 \end{figure}
 
+
+\begin{table}[tbhp]
+    \centering
+    \begin{tabular}{c|c|c}
+        \toprule
+        $n_y$ & Iterations ($\lambda = 0.4$) & Iterations ($\lambda = 0.5$) \\
+        \midrule
+        2 & 5 & 5 \\
+        4 & 14 & 4 \\
+        8 & 20 & 22 \\
+        16 & 20 & 22 \\
+        32 & 35 & 30 \\
+        64 & 26 & 18 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Newton iteration counts for multigrid levels considered in Section~\ref{subsec:fixed_l_numerical_results}. We can see the multigrid strategy is effective in providing high-quality initial guesses, as iteration counts do not grow dramatically with increasing resolution.}
+    \label{tab:iterations}
+\end{table}
+
 \section{\label{sec:inference}Inferring $\lambda$}
 \subsection{Objective function and optimization}\label{subsec:inference_optimization}
-As mentioned in the preceding sections, our goal is to single out the smooth solution at $\lambda = 0.5$ from nearby non-smooth solutions by exploiting the fact that the non-smooth solutions have discontinuous fourth derivative at the origin. To do so, we consider the new residual function $\widehat{\mathcal{L}}_\lambda: \mathbb{R}^{n_y/2+1}\times\mathbb{R}^{n_y/2+1}\times \mathbb{R} \to \mathbb{R}^{n_y+3}$ given by 
+As mentioned in the preceding sections, our goal is to single out the smooth solution at $\lambda = 0.5$ from nearby non-smooth solutions by exploiting the fact that the non-smooth solutions have discontinuous fourth derivative at the origin.
+In the PINN framework in~\cite{wang2023asymptotic}, the optimization is performed simultaneously over both the parameter $\lambda$ and the solution $U(y)$, where the solution is represented implicitly by neural network weights and a regularization term is added to penalize the fourth derivative of the neural network at points near the origin. We attempted to adopt the same strategy with out collocation-based approach, but we found that the joint optimization either converged to incorrect solutions or failed to converge altogether. We believe this difficulty reflects a fundamental difference in the two formulations. In the PINN setting, the optimization variables are network weights--parameters that do not directly corresond to pointwise values of the solution. The neural network itself provides a form of regularization, thereby improving conditioning for the problem. On the other hand, our approach optimizes directly over the solution values at the Chebyshev collocation points, rather than over network weights, introducing severe ill-conditioning when attempting to jointly optimize $\lambda$ and $U$ together. The fundamental issue arises from the fact that the fourth derivative operator $D^4$ is extremely ill-conditioned, with a condition number that grows rapidly with the number of collocation points. When we include the regularization term $\mathcal{L}^{\textrm{reg}}_\lambda(\mathbf{U}_1, \mathbf{U}_2)$ that enforces continuity of the fourth derivative at the interface, the overall problem becomes extremely ill-conditioned, making gradient-based optimization methods (such as Newton-type methods) numerically unstable and prone to convergence failures. This behavior is also intuitive: even very small perturbations in discrete solution values can produce extremely large errors in high-order derivatives, making simultaneous optimization over $\lambda$ and $U$ extremely difficult.
+
+To address this difficulty, we adopt a nested optimization strategy combined with a 
+gradient-free outer solver. For each fixed value of $\lambda$, let 
 \begin{equation}
-    \widehat{\mathcal{L}}(\mathbf{U}_1, \mathbf{U}_2, \lambda) = 
+    \mathbf{U}^\lambda =
     \begin{pmatrix}
-        \mathcal{L}_\lambda(\mathbf{U}_1, \mathbf{U}_2)\\
-        \mathcal{L}^{\textrm{reg}}_\lambda(\mathbf{U}_1, \mathbf{U}_2)
+    \mathbf{U}_1^\lambda \\
+    \mathbf{U}_2^\lambda
     \end{pmatrix}
 \end{equation}
-where $\mathcal{L}_\lambda(\mathbf{U}_1, \mathbf{U}_2)$ is defined in eq.~\eqref{eq:fixed_l_loss}, and 
-\begin{equation}
-    \mathcal{L}^{\textrm{reg}}_\lambda(\mathbf{U}_1, \mathbf{U}_2) = 
-        (D^4\mathbf{U}_1)_{n_y/2} - (D^4\mathbf{U}_2)_{0}.
+denote the solution of the fixed-$\lambda$ problem described in 
+Section~\ref{subsec:optimization}. We then define the scalar objective
+\begin{equation}\label{eq:inference_loss}
+\mathcal{L}^{\mathrm{reg}}(\lambda)
+    = \left|(D^4 \mathbf{U}_1^\lambda)_{n_y/2}
+    - (D^4 \mathbf{U}_2^\lambda)_{0}\right|,
 \end{equation}
-penalizes any jump in the fourth derivative.
+and optimize this one-dimensional function using the Nelder--Mead method, a 
+derivative-free algorithm. This decoupled approach avoids the severe ill-conditioning encountered in the 
+joint optimization as the inner problem (solving for $U$ at fixed $\lambda$) remains 
+well behaved because it does not incorporate the fourth-derivative operator $D^4$ 
+into the optimization itself, while the outer optimization introduces $D^4$ only 
+at the $\lambda$ level and does not involve optimization over the solution values. To validate this approach, we plot the scalar objective 
+$\mathcal{L}^{\mathrm{reg}}(\lambda)$ over the interval $[0.45, 0.55]$ in 
+Figure~\ref{fig:loss_vs_lambda}. Although $\mathbf{U}^\lambda$ contains numerical 
+errors, the loss nevertheless attains a clear global minimum near the true value 
+$\lambda = 0.5$, demonstrating the effectiveness of the scalarized nested 
+optimization for estimating the optimal parameter. We also note that the loss is 
+not convex, so in practice we initialize the Nelder--Mead algorithm from several 
+random starting points within the interval and retain the solution corresponding 
+to the smallest loss.
 
-In the PINN framework in~\cite{wang2023asymptotic}, the optimization is performed simultaneously over both the parameter $\lambda$ and the solution $U(y)$, where the solution is represented implicitly by neural network weights. We attempted to adopt the same strategy with out collocation-based approach, but we found that the joint optimization either converged to incorrect solutions or failed to converge altogether. We believe this difficulty reflects a fundamental difference in the two formulations. In the PINN setting, the optimization variables are network weights--parameters that do not directly corresond to pointwise values of the solution. The neural network itself provides a form of regularization, thereby improving conditioning for the problem. On the other hand, our approach optimizes directly over the solution values at the Chebyshev collocation points, rather than over network weights, introducing severe ill-conditioning when attempting to jointly optimize $\lambda$ and $U$ together. The fundamental issue arises from the fact that the fourth derivative operator $D^4$ is extremely ill-conditioned, with a condition number that grows rapidly with the number of collocation points. When we include the regularization term $\mathcal{L}^{\textrm{reg}}_\lambda(\mathbf{U}_1, \mathbf{U}_2)$ that enforces continuity of the fourth derivative at the interface, the overall problem becomes extremely ill-conditioned, making gradient-based optimization methods (such as Newton-type methods) numerically unstable and prone to convergence failures. This behavior is also intuitive: even very small perturbations in discrete solution values can produce extremely large errors in high-order derivatives, making simultaneous optimization over $\lambda$ and $U$ extremely difficult.
+\begin{figure}[tbhp]
+    \centering
+    \includegraphics[width=0.7\textwidth]{images/loss_vs_lambda.png}
+    \caption{Scalar objective $\mathcal{L}^{\mathrm{reg}}(\lambda)$ (see eq.~\eqref{eq:inference_loss}) as a function of $\lambda$. The sharp dip at $\lambda \approx 0.5$ indicates the location where the solution becomes smooth and the fourth-derivative jump vanishes.}
+    \label{fig:loss_vs_lambda}
+\end{figure}
 
-To overcome this challenge, we adopt a nested optimization strategy: we construct a grid of candidate values for $\lambda$, solving the fixed-$\lambda$ problem described in Section~\ref{subsec:optimization} for each $\lambda$ to obtain the corresponding solution $U_\lambda(y)$. We then evaluate the regularization residual $\mathcal{L}^{\textrm{reg}}_\lambda(\mathbf{U}_1, \mathbf{U}_2)$ as a function of $\lambda$ alone, and optimize this scalar function using the Nelder-Mead method (a derivative-free optimization algorithm). This decoupled approach avoids the ill-conditioning issues associated with the joint optimization, as the inner optimization (over $U$ for fixed $\lambda$) remains well-conditioned, while the outer optimization (over $\lambda$) operates on a scalar function that can be reliably minimized using derivative-free methods.
+\subsection{Inferring $\lambda$: numerical results}\label{subsec:inference_numerical_results}
+
+In this section, we present the results of applying the nested optimization strategy to infer the parameter $\lambda$. As in Section~\ref{subsec:fixed_l_numerical_results}, we use $n_y = 64$ collocation points (see Remark~\ref{rmk:n_y-selection}). We initialize the Nelder--Mead outer optimization from $20$ random values of $\lambda$ sampled uniformly from the interval $[0.45, 0.55]$. Table~\ref{tab:nelder_mead_results} summarizes the results of a single run. We can see the Nelder--Mead optimization terminated successfully for all 20 initial values, requiring between 29 and 34 iterations and between 72 and 88 loss evaluations, which demonstrates the tractability of this formulation. Further, the recovered parameter value, $\lambda = 0.49915829$, lies within $8.4 \times 10^{-4}$ of the true smooth-solution value $\lambda = 0.5$. These results highlight the effectiveness of the approach: despite the markedly non-convex loss landscape—evidenced by the broad range of final loss values (from approximately $0.07$ to $43$)—the Nelder--Mead method is able to identify the global minimizer.
+
+The primary drawback of this nested optimization framework is its computational cost. As shown in Table~\ref{tab:nelder_mead_results}, each run required roughly 80 loss evaluations, resulting in a total of about $20 \times 80 = 1600$ evaluations. Thus, the nested strategy is approximately $1600$ times more expensive than the fixed-$\lambda$ optimization described in Section~\ref{subsec:fixed_l_numerical_results}.
+\begin{table}[tbhp]
+    \centering
+    \begin{tabular}{lc}
+        \toprule
+        Metric & Value \\
+        \midrule
+        Number of Initial Values & 20 \\
+        Successful convergences & 20 \\
+        Final $\lambda$ value & 0.49915829 \\
+        Error from true value ($\lambda = 0.5$) & $8.4 \times 10^{-4}$ \\
+        \midrule
+        Iterations: min/max/mean & 29 / 34 / 31.0 \\
+        Loss evaluations: min/max/mean & 72 / 88 / 79.3 \\
+        Final loss: min/max/mean & 0.065 / 42.813 / 7.2 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Summary of Nelder--Mead optimization results from 20 random 
+    initializations in $[0.45, 0.55]$. Single run of Nelder--Mead optimization (see Section~\ref{subsec:inference_optimization}). The wide range of final function values (0.065 to 42.813) 
+    reflects the non-convex nature of the loss landscape, yet we successfully
+    recovered the global minimum near $\lambda = 0.5$.}
+    \label{tab:nelder_mead_results}
+\end{table}
+
+\section{Conclusions}\label{sec:conclusions}
+In this report, we developed a collocation-based framework for solving the
+self-similar Burgers equation and for inferring the parameter $\lambda$ that
+distinguishes smooth from non-smooth similarity profiles. The localized
+Chebyshev method proved effective on each subinterval, accurately capturing both
+smooth and cusp-like behavior near the origin. Combined with automatic
+differentiation and a multigrid-style initialization strategy, this approach
+yielded accurate solutions for fixed $\lambda$. Because direct joint optimization over $(\lambda, U)$ is severely
+ill-conditioned--due largely to the instability of high-order differentiation
+matrices--we adopted a nested strategy in which the fixed $\lambda$ problem is solved in each iteration of the outer optimization,
+and $\lambda$ is then inferred by minimizing a scalar measure of the
+fourth-derivative jump. Despite the non-convexity of this objective, the
+derivative-free Nelder--Mead method reliably recovered the correct smoothing
+parameter $\lambda = 0.5$ with several digits of accuracy. Overall, these results show that localized spectral discretization combined with
+nested optimization offers a robust framework for studying self-similar blowup
+profiles and identifying smoothness-determining parameters. 
+
+Future directions
+include extending the method to other discrete values of $\lambda$ that admit
+smooth similarity solutions (including unstable blowups), examining regimes that
+require detecting nonsmoothness in even higher derivatives, and applying the
+approach to more complex nonlinear PDEs.
+
 
 \bibliographystyle{abbrv}
 \bibliography{references}
