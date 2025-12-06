@@ -46,10 +46,7 @@ if __name__ == "__main__":
         u_num, _, _ = fixed_l_inference(64, l, tol=1e-10)
         u_num_lst.append(u_num)
 
-    def loss_function(params):
-        U = params[:n_y+2]
-        l = params[-1]
-
+    def loss_function(l):
         U1 = np.flip(U[:n_segment])
         U2 = np.flip(U[n_segment:])
 

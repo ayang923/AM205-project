@@ -47,84 +47,6 @@ def construct_exact_solution(y_mesh, l=0.4):
 
     return u_exact
 
-def construct_loss_function_ad(l, n_y, D1, y1, D2, y2):
-    """
-    Construct loss function using JAX for automatic differentiation.
-    
-    This version uses automatic differentiation to compute gradients
-    exactly, which can be more accurate and efficient than finite differences
-    or manual gradient computation.
-    
-    Parameters
-    ----------
-    l : float
-        Parameter lambda
-    n_y : int
-        Number of y points
-    D1, D2 : jnp.ndarray
-        Differentiation matrices for segments 1 and 2
-    y1, y2 : jnp.ndarray
-        y coordinates for segments 1 and 2
-    
-    Returns
-    -------
-    loss_function : callable
-        JAX-compiled loss function that returns scalar loss
-    """
-    n_segment = int(n_y/2)+1
-    
-    # Convert masks to JAX arrays (computed once, used in loss)
-    y1_msk = jnp.array(y1 >= -0.3)
-    y2_msk = jnp.array(y2 <= 0.3)
-    
-    @jit
-    def loss_function(U):
-        """
-        Compute loss using automatic differentiation.
-        
-        Parameters
-        ----------
-        U : jnp.ndarray
-            Solution vector [U1, U2] concatenated
-        
-        Returns
-        -------
-        loss : float
-            Total loss value
-        """
-        U1 = jnp.flip(U[:n_segment])
-        U2 = jnp.flip(U[n_segment:])
-
-        DU1 = D1 @ U1
-        DU2 = D2 @ U2
-
-        # D2U1 = D1 @ DU1
-        # D2U2 = D2 @ DU2
-
-        # D3U1 = D1 @ D2U1
-        # D3U2 = D2 @ D2U2
-    
-        residual_1 = -l*U1 + ((1+l)*y1 + U1)*DU1
-        residual_2 = -l*U2 + ((1+l)*y2 + U2)*DU2
-
-        bc_1 = U1[-1]-1
-        bc_2 = U2[0]+1
-
-        matching = U1[0] - U2[-1]
-        matchingD = DU1[0] - DU2[-1]
-        # matchingD2 = D2U1[0] - D2U2[-1]
-        # matchingD3 = D3U1[0] - D3U2[-1]
-        
-        return (
-            1/(n_segment) * jnp.sum(residual_1**2)
-            + 1/2 * bc_1**2
-            + 1/(n_segment) * jnp.sum(residual_2**2)
-            + 1/2 * bc_2**2
-            + matching**2
-            + matchingD**2
-        )
-
-    return loss_function
 
 def construct_system_residuals(l, n_y, D1, y1, D2, y2):
     """
@@ -200,7 +122,7 @@ def construct_system_residuals(l, n_y, D1, y1, D2, y2):
         
         # Assemble residual vector
         residuals = jnp.concatenate([
-            residual_1_interior,        # n_segment - 2 residuals
+            residual_1_interior,        # n_segment - 1 residuals
             residual_2_interior,        # n_segment - 2 residuals
             jnp.array([bc_1, bc_2]),     # 2 boundary conditions
             jnp.array([matching, matchingD])  # 2 matching conditions
@@ -210,7 +132,7 @@ def construct_system_residuals(l, n_y, D1, y1, D2, y2):
     
     return system_residuals
 
-def fixed_l_inference_ad(n_y, l, tol=1e-20, optimizer='lbfgs', maxiter=200000):
+def fixed_l_inference_ad(n_y, l, tol=1e-20, optimizer='lbfgs', maxiter=200000, disp=True):
     """
     Solve the Burgers equation using automatic differentiation and gradient-based optimization.
     
@@ -317,7 +239,7 @@ def fixed_l_inference_ad(n_y, l, tol=1e-20, optimizer='lbfgs', maxiter=200000):
 
     return u_num_lst[-1], n_segment, (y1, D1, y2, D2)
 
-def fixed_l_inference_system(n_y, l, tol=1e-14, method='hybr', maxiter=100):
+def fixed_l_inference_system(n_y, l, tol=1e-14, method='hybr', maxiter=100, disp=True):
     """
     Solve as a system of equations F(U) = 0 using Newton's method.
     
@@ -423,8 +345,9 @@ def fixed_l_inference_system(n_y, l, tol=1e-14, method='hybr', maxiter=100):
         u_num = result.x
         residual_norm = np.linalg.norm(residual_np(u_num))
         
-        print(f"Level {i+1}/{len(multigrid_resolutions)} (n_y={n_y_current}): "
-              f"Success={result.success}, Residual norm={residual_norm:.6e}")
+        if disp:
+            print(f"Level {i+1}/{len(multigrid_resolutions)} (n_y={n_y_current}): "
+                f"Success={result.success}, Residual norm={residual_norm:.6e}")
 
         u_num_lst.append(u_num)
         y1_prev = y1

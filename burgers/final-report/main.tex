@@ -111,8 +111,8 @@ Related work done in~\cite{wang2023asymptotic} demonstrates the application of P
 The remainder of this report is organized as follows. We first introduce the piecewise Chebyshev collocation method used to discretize the boundary value problem~\eqref{eq:bvp}, along with comparison to other differentiation methods. We then present numerical results for the case where $\lambda$ is fixed and known, demonstrating effectiveness of our spectral method approach. Finally, we extend the method to the more challenging problem of inferring the parameter $\lambda$ simultaneously with the solution $U(y)$, where we solve a coupled optimization problem that determines both the solution profile and the self-similar scaling parameter.
 
 
-\section{\label{sec:collocation}Solving for fixed $\lambda$}
-\subsection{Localized Chebyshev collocation}
+\section{\label{sec:fixed_l}Solving for fixed $\lambda$}
+\subsection{Localized Chebyshev collocation}\label{subsec:collocation}
 
 For values of $\lambda$ that are not exactly equal to $\lambda = 1/(2(j+1))$ for $j = 0, 1, 2, \ldots$, the solution $U(y)$ to~\eqref{eq:bvp} exhibits nonsmooth behavior at the origin. For this project we specifically consider $\lambda$ in a neighborhood of $\lambda=0.5$, where the fourth derivative $U^{(4)}(y)$ becomes unbounded as $y \to 0$ for $\lambda \neq 0.5$. This nonsmoothness poses a challenge for standard spectral methods, which assume global smoothness of the solution. 
 To overcome this, we utilize a localized Chebyshev collocation approach by dividing the domain $[-2, 2]$ into two subintervals: $[-2, 0]$ and $[0, 2]$, and discretize each segment with Chebyshev points, which naturally cluster near the boundaries of each segment. More concretely, for a given (even) resolution parameter $n_y$, we divide the domain $[-2, 2]$ into two subintervals, $[-2, 0]$ and $[0, 2]$. Each subinterval is discretized using $n_y/2 + 1$ Chebyshev collocation points, resulting in a total of $n_y + 1$ distinct points overall—-with the endpoint $y = 0$ shared by both subintervals. For the remainder of this report, we denote
@@ -138,28 +138,28 @@ This clustering property is also intuitive: because $y=0$ serves as the shared i
 \begin{figure}[tbhp]
     \centering
     \includegraphics[width=\textwidth]{images/deriv_exact_comparison.png}
-    \caption{Comparison of fourth derivative $U^{(4)}(y)$ computed using different differentiation methods for $\lambda = 0.4$ and $n_y = 128$ discretization points. The exact solution (black line) is computed using piecewise Chebyshev with 512 points. The plot demonstrates that the piecewise Chebyshev method provides superior accuracy near the origin, where the fourth derivative becomes unbounded.}
+    \caption{Comparison of fourth derivative $U^{(4)}(y)$ computed using different differentiation methods for $\lambda = 0.4$ and $n_y = 128$ discretization points. The exact solution (black line) is computed using spectral differentiation with 512 points. The plot demonstrates that the piecewise Chebyshev method provides superior accuracy near the origin, where the fourth derivative becomes unbounded.}
     \label{fig:deriv_comparison}
 \end{figure}
 
-\subsection{Objective function and optimization}
+\subsection{Objective function and optimization}\label{subsec:optimization}
 
-Rather than minimizing a weighted loss function that combines PDE residuals and boundary conditions as in the PINNS setting introduced in~\cite{wang2023asymptotic}, we formulate the problem as the root-finding of a certain vector function $\mathcal{L}: \mathbb{R}^{n_y/2+1} \times \mathbb{R}^{n_y/2+1} \to \mathbb{R}^{n_y+2}$ where $n_y$ is the resolution parameter introduced in the preceding section. In detail, the vector function $\mathcal{L}(\mathbf{U}_1, \mathbf{U}_2)$ is given by 
-\begin{equation}
-    \mathcal{L}(\mathbf{U}_1, \mathbf{U}_2) = 
+Rather than minimizing a weighted loss function that combines PDE residuals and boundary conditions as in the PINNS setting introduced in~\cite{wang2023asymptotic}, we formulate the problem as the root-finding of a certain vector function $\mathcal{L}_\lambda: \mathbb{R}^{n_y/2+1} \times \mathbb{R}^{n_y/2+1} \to \mathbb{R}^{n_y+2}$ where $n_y$ is the resolution parameter introduced in the preceding section. In detail, for a given $\lambda$, the vector function $\mathcal{L}_\lambda(\mathbf{U}_1, \mathbf{U}_2)$ is given by 
+\begin{equation}\label{eq:fixed_l_loss}
+    \mathcal{L}_\lambda(\mathbf{U}_1, \mathbf{U}_2) = 
     \begin{pmatrix}
-        \mathcal{L}^{\textrm{PDE}}(\mathbf{U}_1)\\
-        \mathcal{L}^{\textrm{PDE}}(\mathbf{U}_2)\\
-        \mathcal{L}^{\textrm{BC}}(\mathbf{U}_1,\mathbf{U}_2)\\
-        \mathcal{L}^{\textrm{interface}}(\mathbf{U}_1, \mathbf{U}_2)\\
+        \mathcal{L}^{\textrm{PDE}}_\lambda(\mathbf{U}_1)\\
+        \mathcal{L}^{\textrm{PDE}}_\lambda(\mathbf{U}_2)\\
+        \mathcal{L}^{\textrm{BC}}_\lambda(\mathbf{U}_1,\mathbf{U}_2)\\
+        \mathcal{L}^{\textrm{interface}}_\lambda(\mathbf{U}_1, \mathbf{U}_2)\\
     \end{pmatrix}
 \end{equation}
 where
 \begin{equation}
-    (\mathcal{L}^{\textrm{PDE}}(\mathbf{U}))_{i-1} = -\lambda (\mathbf{U})_i + ((1+\lambda)y_i + (\mathbf{U})_i)(D\mathbf{U})_i, \quad i = 1, 2, \ldots, n_y/2-1,
+    (\mathcal{L}^{\textrm{PDE}}_\lambda(\mathbf{U}))_{i-1} = -\lambda (\mathbf{U})_i + ((1+\lambda)y_i + (\mathbf{U})_i)(D\mathbf{U})_i, \quad i = 1, 2, \ldots, n_y/2-1,
 \end{equation}
 \begin{equation}
-    (\mathcal{L}^{\textrm{BC}}(\mathbf{U}_1,\mathbf{U}_2))_{i} = 
+    (\mathcal{L}^{\textrm{BC}}_\lambda(\mathbf{U}_1,\mathbf{U}_2))_{i} = 
     \begin{cases}
         (\mathbf{U}_1)_0 - 1, & i = 0, \\
         (\mathbf{U}_2)_{n_y/2} - 1, & i = 1, \\
@@ -167,7 +167,7 @@ where
 \end{equation}
 and
 \begin{equation}
-    (\mathcal{L}^{\textrm{interface}}(\mathbf{U}_1, \mathbf{U}_2))_{i} = 
+    (\mathcal{L}^{\textrm{interface}}_\lambda(\mathbf{U}_1, \mathbf{U}_2))_{i} = 
     \begin{cases}
         (\mathbf{U}_1)_{n_y/2} - (\mathbf{U}_2)_{0}, & i = 0, \\
         (D\mathbf{U}_1)_{n_y/2} - (D\mathbf{U}_2)_{0}, & i = 1.
@@ -177,10 +177,41 @@ In summary, these residuals enforce the boundary value problem within each subin
 
 To solve this system, we employ Newton-type methods (specifically, Powell's hybrid method) with the Jacobian computed exactly using automatic differentiation via JAX. Because convergence to the correct solution becomes more delicate at higher resolutions (larger $n_y$), we employ a multigrid-style strategy for constructing initial guesses. We first solve the system on a coarse grid, interpolate the solution onto a finer grid using piecewise linear interpolation, and use this interpolated solution as the initial guess for the solver at the increased resolution. Iterating this process from coarse to fine grids provides high-quality initial guesses, greatly improving convergence and robustness of the solver.
 
-\subsection{Fixed $\lambda$: numerical results}
-In this section, we present the effectiveness of the proposed method for solving the boundary value problem~\eqref{eq:bvp} for a fixed $\lambda$. We consider the non-smooth case where $\lambda = 0.4$ and the smooth case where $\lambda = 0.5$. and $n_y = 128$.
+\subsection{Fixed $\lambda$: numerical results}\label{subsec:fixed_l_numerical_results}
+In this section, we present the effectiveness of the proposed method for solving the boundary value problem~\eqref{eq:bvp} for a fixed $\lambda$. We consider the non-smooth case where $\lambda = 0.4$ and the smooth case where $\lambda = 0.5$, using a discretization of $n_y = 64$ for the numerical solution. Figure~\ref{fig:fixed_l} displays the numerical solution $U(y)$ and its first four derivatives $U'(y)$, $U''(y)$, $U'''(y)$, and $U^{(4)}(y)$ for both values of $\lambda$. The numerical solutions (blue solid lines) are obtained using the localized Chebyshev collocation method described in Section~\ref{subsec:collocation} and the root-finding approach with Powell's hybrid method from Section~\ref{subsec:optimization}, where the Jacobian is computed using automatic differentiation. The exact solutions (red dashed lines, see eq.~\eqref{eq:solution}) serve as reference. 
+The derivative of the exact solution are computed via the spectral differentiation method with the localized Chebyshev nodes described in Seciton~\ref{subsec:collocation} using the finer resolution $n_y = 128$. In view of the rapid convergence of spectral differentiation for smooth functions, the approximation error becomes negligible relative to the error for the coarser resolution $n_y = 64$.
+Finally, we optimize to a tolerance of $10^{-9}$ and use multigrid levels $n_y = 2, 4, 8, 16,$ and $32$ for constructing initial guesses via piecewise linear interpolation.
 
+In both cases, we observe that the numerical solution is in good agreement with the exact solution. For the case $\lambda = 0.4$, we observe an absolute $\ell_\infty$ error of $2.1 \times 10^{-7}$ and a relative $\ell_2$ error of $1.2 \times 10^{-7}$, while for the case $\lambda = 0.5$, we observe an absolute $\ell_\infty$ error of $1.7 \times 10^{-7}$ and a relative $\ell_2$ error of $1.1 \times 10^{-7}$. The solution $U(y)$ itself is smooth and well-captured, with the numerical method accurately reproducing the odd symmetry and boundary conditions $U(-2) = 1$ and $U(2) = -1$. The interface conditions at $y = 0$—requiring continuity of both the solution and its first derivative—are also successfully recovered through the system formulation, as evidenced by the smooth transition visible in the plots. 
+Although the numerical higher order derivatives (particularly the third and fourth) show instabilities near the boundaries, the method nevertheless resolves the key features distinguishing the two solutions: the cusp at the origin when $\lambda = 0.4$ and the smooth profile for $\lambda = 0.5$, achieving accuracies comparable to the PINN-based method reported in~\cite{wang2023asymptotic}. The results demonstrate that the piecewise Chebyshev collocation method, combined with gradient-based optimization, provides an effective and accurate approach for solving the boundary value problem~\eqref{eq:bvp}, even in the presence of non-smooth behavior at the origin. The method successfully handles both smooth and non-smooth cases, with the natural clustering of Chebyshev points near the origin ensuring adequate resolution where it is most needed.
 
+\begin{figure}[tbhp]
+    \centering
+    \includegraphics[width=\textwidth]{images/fixed_l.png}
+    \caption{Comparison of numerical solutions (blue solid lines, $n_y = 64$) and exact solutions (red dashed lines) for the boundary value problem~\eqref{eq:bvp} with $\lambda = 0.4$ (top row) and $\lambda = 0.5$ (bottom row). Each row displays the solution $U(y)$ and its first four derivatives. The numerical method accurately captures both the smooth case ($\lambda = 0.5$) and the non-smooth case ($\lambda = 0.4$), where the fourth derivative becomes unbounded near the origin.}
+    \label{fig:fixed_l}
+\end{figure}
+
+\section{\label{sec:inference}Inferring $\lambda$}
+\subsection{Objective function and optimization}\label{subsec:inference_optimization}
+As mentioned in the preceding sections, our goal is to single out the smooth solution at $\lambda = 0.5$ from nearby non-smooth solutions by exploiting the fact that the non-smooth solutions have discontinuous fourth derivative at the origin. To do so, we consider the new residual function $\widehat{\mathcal{L}}_\lambda: \mathbb{R}^{n_y/2+1}\times\mathbb{R}^{n_y/2+1}\times \mathbb{R} \to \mathbb{R}^{n_y+3}$ given by 
+\begin{equation}
+    \widehat{\mathcal{L}}(\mathbf{U}_1, \mathbf{U}_2, \lambda) = 
+    \begin{pmatrix}
+        \mathcal{L}_\lambda(\mathbf{U}_1, \mathbf{U}_2)\\
+        \mathcal{L}^{\textrm{reg}}_\lambda(\mathbf{U}_1, \mathbf{U}_2)
+    \end{pmatrix}
+\end{equation}
+where $\mathcal{L}_\lambda(\mathbf{U}_1, \mathbf{U}_2)$ is defined in eq.~\eqref{eq:fixed_l_loss}, and 
+\begin{equation}
+    \mathcal{L}^{\textrm{reg}}_\lambda(\mathbf{U}_1, \mathbf{U}_2) = 
+        (D^4\mathbf{U}_1)_{n_y/2} - (D^4\mathbf{U}_2)_{0}.
+\end{equation}
+penalizes any jump in the fourth derivative.
+
+In the PINN framework in~\cite{wang2023asymptotic}, the optimization is performed simultaneously over both the parameter $\lambda$ and the solution $U(y)$, where the solution is represented implicitly by neural network weights. We attempted to adopt the same strategy with out collocation-based approach, but we found that the joint optimization either converged to incorrect solutions or failed to converge altogether. We believe this difficulty reflects a fundamental difference in the two formulations. In the PINN setting, the optimization variables are network weights--parameters that do not directly corresond to pointwise values of the solution. The neural network itself provides a form of regularization, thereby improving conditioning for the problem. On the other hand, our approach optimizes directly over the solution values at the Chebyshev collocation points, rather than over network weights, introducing severe ill-conditioning when attempting to jointly optimize $\lambda$ and $U$ together. The fundamental issue arises from the fact that the fourth derivative operator $D^4$ is extremely ill-conditioned, with a condition number that grows rapidly with the number of collocation points. When we include the regularization term $\mathcal{L}^{\textrm{reg}}_\lambda(\mathbf{U}_1, \mathbf{U}_2)$ that enforces continuity of the fourth derivative at the interface, the overall problem becomes extremely ill-conditioned, making gradient-based optimization methods (such as Newton-type methods) numerically unstable and prone to convergence failures. This behavior is also intuitive: even very small perturbations in discrete solution values can produce extremely large errors in high-order derivatives, making simultaneous optimization over $\lambda$ and $U$ extremely difficult.
+
+To overcome this challenge, we adopt a nested optimization strategy: we construct a grid of candidate values for $\lambda$, solving the fixed-$\lambda$ problem described in Section~\ref{subsec:optimization} for each $\lambda$ to obtain the corresponding solution $U_\lambda(y)$. We then evaluate the regularization residual $\mathcal{L}^{\textrm{reg}}_\lambda(\mathbf{U}_1, \mathbf{U}_2)$ as a function of $\lambda$ alone, and optimize this scalar function using the Nelder-Mead method (a derivative-free optimization algorithm). This decoupled approach avoids the ill-conditioning issues associated with the joint optimization, as the inner optimization (over $U$ for fixed $\lambda$) remains well-conditioned, while the outer optimization (over $\lambda$) operates on a scalar function that can be reliably minimized using derivative-free methods.
 
 \bibliographystyle{abbrv}
 \bibliography{references}
