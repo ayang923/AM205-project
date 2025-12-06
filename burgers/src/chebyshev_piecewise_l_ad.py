@@ -70,7 +70,7 @@ def construct_loss(n_y, D1_4, D2_4):
         return D4_match
     return loss
 
-def l_inference_system(n_y, tol=1e-14, method='hybr', maxiter=100):
+def l_inference_system(n_y, tol=1e-14, method='hybr', maxiter=100, n_x0=20):
     """
     Solve as a system of equations F(U) = 0 using Newton's method.
 
@@ -114,9 +114,17 @@ def l_inference_system(n_y, tol=1e-14, method='hybr', maxiter=100):
     loss = construct_loss(n_y, D1_4, D2_4)
     
     # Only optimize lambda (assume loss function takes l as input)
-    result = minimize(loss, x0=0.52, method='Nelder-Mead', tol=tol, options={'maxiter': maxiter, "disp": True})
-    l_opt = result.x
-
+    best_l = None
+    best_loss = np.inf
+    for i in range(n_x0):
+        x0 = np.random.uniform(0.45, 0.55)
+        result = minimize(loss, x0=x0, method='Nelder-Mead', tol=tol, options={'maxiter': maxiter, "disp": True})
+        l_opt = result.x
+        if result.fun < best_loss:
+            best_loss = result.fun
+            best_l = l_opt
+    
+    return best_l
     return l_opt
 if __name__ == "__main__":
     n_y = 64
@@ -124,7 +132,9 @@ if __name__ == "__main__":
     method = 'lbfgs'
     maxiter = 50000
 
-    l = l_inference_system(n_y, tol=tol, method=method, maxiter=maxiter)
+    n_x0 = 20
+
+    l = l_inference_system(n_y, tol=tol, method=method, maxiter=maxiter, n_x0=n_x0)
 
     print(f"(n_y={n_y}): "
             f"l={l}")

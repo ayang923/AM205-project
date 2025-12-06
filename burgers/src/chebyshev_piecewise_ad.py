@@ -347,7 +347,8 @@ def fixed_l_inference_system(n_y, l, tol=1e-14, method='hybr', maxiter=100, disp
         
         if disp:
             print(f"Level {i+1}/{len(multigrid_resolutions)} (n_y={n_y_current}): "
-                f"Success={result.success}, Residual norm={residual_norm:.6e}")
+                  f"Success={result.success}, Residual norm={residual_norm:.6e}, "
+                  f"Iterations={result.nfev if hasattr(result, 'nfev') else 'N/A'}")
 
         u_num_lst.append(u_num)
         y1_prev = y1
