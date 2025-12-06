@@ -132,12 +132,12 @@ The corresponding derivative vectors $D\mathbf{U}_1 \in \mathbb{R}^{n_y/2+1}$ an
 \end{remark}
 
 On each open segment $(-2, 0)$ and $(0, 2)$, the solution $U$ remains smooth, allowing the spectral method to accurately capture its behavior within each piece. 
-This clustering property is also intuitive: because $y=0$ serves as the shared interface between the two subintervals, the Chebyshev points naturally accumulate near this nonsmooth region. As a result, we achieve enhanced resolution precisely where the solution demands finer discretization, allowing for more accurate representation and treatment of the challenging behavior near the origin. The advantage of this approach is illustrated in Figure~\ref{fig:deriv_comparison}, which compares the fourth derivative computed using three different methods: regular Chebyshev collocation on the full domain, piecewise Chebyshev collocation, and first-order finite differences. The plot clearly demonstrates that the piecewise method provides superior accuracy near the origin, where the fourth derivative becomes unbounded. The regular Chebyshev method struggles to capture this behavior due to its global smoothness assumption, while the piecewise approach naturally clusters points around the nonsmooth region, providing the necessary resolution to accurately represent the solution structure.
+This clustering property is also intuitive: because $y=0$ serves as the shared interface between the two subintervals, the Chebyshev points naturally accumulate near this nonsmooth region. As a result, we achieve enhanced resolution precisely where the solution demands finer discretization, allowing for more accurate representation and treatment of the challenging behavior near the origin. The advantage of this approach is illustrated in Figure~\ref{fig:deriv_comparison}, which compares the fourth derivative computed using three different methods: regular Chebyshev collocation on the full domain, localized Chebyshev collocation, and first-order finite differences. The plot clearly demonstrates that the localized method provides superior accuracy near the origin, where the fourth derivative becomes unbounded. The regular Chebyshev method struggles to capture this behavior due to its global smoothness assumption, while the localized approach naturally clusters points around the nonsmooth region, providing the necessary resolution to accurately represent the solution structure.
 
 \begin{figure}[tbhp]
     \centering
     \includegraphics[width=\textwidth]{images/deriv_exact_comparison.png}
-    \caption{Comparison of fourth derivative $U^{(4)}(y)$ computed using different differentiation methods for $\lambda = 0.4$ and $n_y = 128$ discretization points. The exact solution (black line) is computed using spectral differentiation with 512 points. The plot demonstrates that the piecewise Chebyshev method provides superior accuracy near the origin, where the fourth derivative becomes unbounded.}
+    \caption{Comparison of fourth derivative $U^{(4)}(y)$ computed using different differentiation methods for $\lambda = 0.4$ and $n_y = 128$ discretization points. The exact solution (black line) is computed using spectral differentiation with 512 points. The plot demonstrates that the localized Chebyshev method provides superior accuracy near the origin, where the fourth derivative becomes unbounded.}
     \label{fig:deriv_comparison}
 \end{figure}
 
@@ -188,7 +188,7 @@ Finally, we optimize to a tolerance of $10^{-9}$ and use multigrid levels $n_y =
 In both cases, we observe that the numerical solution is in good agreement with the exact solution. For the case $\lambda = 0.4$, we observe an absolute $\ell_\infty$ error of $2.1 \times 10^{-7}$ and a relative $\ell_2$ error of $1.2 \times 10^{-7}$, while for the case $\lambda = 0.5$, we observe an absolute $\ell_\infty$ error of $1.7 \times 10^{-7}$ and a relative $\ell_2$ error of $1.1 \times 10^{-7}$. The solution $U(y)$ itself is smooth and well-captured, with the numerical method accurately reproducing the odd symmetry and boundary conditions $U(-2) = 1$ and $U(2) = -1$. The interface conditions at $y = 0$—requiring continuity of both the solution and its first derivative—are also successfully recovered through the system formulation, as evidenced by the smooth transition visible in the plots. 
 Although the numerical higher order derivatives (particularly the third and fourth) show instabilities near the boundaries, the method nevertheless resolves the key features distinguishing the two solutions: the cusp at the origin when $\lambda = 0.4$ and the smooth profile for $\lambda = 0.5$, achieving accuracies comparable to the PINN-based method reported in~\cite{wang2023asymptotic}. Further, the multigrid strategy employed for constructing initial guesses demonstrates efficient convergence behavior as shown in Table~\ref{tab:iterations}, typically requiring between 4 and 35 Newton iterations per level. Notably, the iteration count does not grow dramatically with increasing resolution, indicating that the piecewise linear interpolation between grid levels provides high-quality initial guesses that significantly accelerate convergence. We also note that in general, the smooth case ($\lambda = 0.5$) generally requires fewer iterations at intermediate levels compared to the non-smooth case ($\lambda = 0.4$).
 
-Overall, the results demonstrate that the piecewise Chebyshev collocation method, combined with gradient-based optimization, provides an effective and accurate approach for solving the boundary value problem~\eqref{eq:bvp}, even in the presence of non-smooth behavior at the origin. The method successfully handles both smooth and non-smooth cases, with the natural clustering of Chebyshev points near the origin ensuring adequate resolution where it is most needed.
+Overall, the results demonstrate that the localized Chebyshev collocation method, combined with gradient-based optimization, provides an effective and accurate approach for solving the boundary value problem~\eqref{eq:bvp}, even in the presence of non-smooth behavior at the origin. The method successfully handles both smooth and non-smooth cases, with the natural clustering of Chebyshev points near the origin ensuring adequate resolution where it is most needed.
 
 \begin{figure}[tbhp]
     \centering
@@ -310,6 +310,10 @@ smooth similarity solutions (including unstable blowups), examining regimes that
 require detecting nonsmoothness in even higher derivatives, and applying the
 approach to more complex nonlinear PDEs.
 
+\begin{remark}[Code]
+    All code used for the results in this report can be found at\\
+    \url{https://github.com/ayang923/AM205-project}.
+\end{remark}
 
 \bibliographystyle{abbrv}
 \bibliography{references}
