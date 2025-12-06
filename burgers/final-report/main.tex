@@ -102,19 +102,85 @@ Thus, for this project, we consider the boundary value problem
 To understand blowup in this context, notice that the spatial derivative transforms as $\partial_x u = (1-t)^{-\lambda} d_y U$ under the self-similar ansatz. This means if $d_y U$ is nontrivial, then as $t \to 1^-$, the factor $(1-t)^{-\lambda}$ diverges for any $\lambda > 0$, leading to a blowup in the gradient of $u(x, t)$. At the initial time $t=0$, the similarity variable reduces to $y(x, 0) = x$, so if $U(y)$ is smooth within $y \in (-2, 2)$, then $u(x, 0)$ is smooth for $x \in (-2, 2)$. As time advances towards $t = 1$, the region described by the fixed ``inner region'' $y \in [-2, 2]$ corresponds to an increasingly small neighborhood around $x = 0$, capturing precisely where the gradient becomes unbounded. Thus, the primary objective is to find a smooth solution $U(y)$ to the boundary value problem~\eqref{eq:bvp}, which allows us to clearly demonstrate how smooth initial conditions can evolve into a finite-time singularity. 
 We focus on the inviscid Burgers equation due to its well-understood analytical properties, particularly the existence of an explicit self-similar solution~\eqref{eq:solution}, as well as the discrete set of parameter values $\lambda$ admit smooth solutions to the boundary value problem, given by
 \begin{equation}
-    \lambda = \frac{1}{2(n+1)}, \qquad n = 0, 1, 2, \ldots.
+    \lambda = \frac{1}{2(j+1)}, \qquad j = 0, 1, 2, \ldots.
 \end{equation}
 For other $\lambda$, the solutions demonstrate nonsmooth behavior at $y=0$.
 
 Related work done in~\cite{wang2023asymptotic} demonstrates the application of Physics-Informed Neural Networks (PINNs) to the self-similar Burgers equation problem. In their approach, they parameterize the solution $U(y)$ using a neural network and incorporate the PDE residual from~\eqref{eq:bvp} directly into the loss function. The network is trained to minimize a weighted combination of the PDE residual, boundary conditions, and additional regularization terms. Both their method and the approach used in this project rely on automatic differentiation for efficient evaluation of derivatives and gradients. However, while~\cite{wang2023asymptotic} uses neural networks as the ansatz space, this project employs a variation of the Chebyshev collocation method (cf.~\cite{driscoll2016rectangular}), which can achieve spectral accuracy for smooth solutions, also using automatic differentiation for gradient-based optimization. 
 
-The remainder of this report is organized as follows. We first introduce the piecewise Chebyshev collocation method used to discretize the boundary value problem~\eqref{eq:bvp}, along with the automatic differentiation framework that enables efficient gradient computation for optimization. We then present numerical results for the case where $\lambda$ is fixed and known, demonstrating effectiveness of our spectral method approach. Finally, we extend the method to the more challenging problem of inferring the parameter $\lambda$ simultaneously with the solution $U(y)$, where we solve a coupled optimization problem that determines both the solution profile and the self-similar scaling parameter.
+The remainder of this report is organized as follows. We first introduce the piecewise Chebyshev collocation method used to discretize the boundary value problem~\eqref{eq:bvp}, along with comparison to other differentiation methods. We then present numerical results for the case where $\lambda$ is fixed and known, demonstrating effectiveness of our spectral method approach. Finally, we extend the method to the more challenging problem of inferring the parameter $\lambda$ simultaneously with the solution $U(y)$, where we solve a coupled optimization problem that determines both the solution profile and the self-similar scaling parameter.
 
-\section{\label{sec:collocation}``Piecewise'' Chebyshev collocation}
 
-\begin{example}[Comparison of different Differentiation methods]
-    
-\end{example}
+\section{\label{sec:collocation}Solving for fixed $\lambda$}
+\subsection{Localized Chebyshev collocation}
+
+For values of $\lambda$ that are not exactly equal to $\lambda = 1/(2(j+1))$ for $j = 0, 1, 2, \ldots$, the solution $U(y)$ to~\eqref{eq:bvp} exhibits nonsmooth behavior at the origin. For this project we specifically consider $\lambda$ in a neighborhood of $\lambda=0.5$, where the fourth derivative $U^{(4)}(y)$ becomes unbounded as $y \to 0$ for $\lambda \neq 0.5$. This nonsmoothness poses a challenge for standard spectral methods, which assume global smoothness of the solution. 
+To overcome this, we utilize a localized Chebyshev collocation approach by dividing the domain $[-2, 2]$ into two subintervals: $[-2, 0]$ and $[0, 2]$, and discretize each segment with Chebyshev points, which naturally cluster near the boundaries of each segment. More concretely, for a given (even) resolution parameter $n_y$, we divide the domain $[-2, 2]$ into two subintervals, $[-2, 0]$ and $[0, 2]$. Each subinterval is discretized using $n_y/2 + 1$ Chebyshev collocation points, resulting in a total of $n_y + 1$ distinct points overall—-with the endpoint $y = 0$ shared by both subintervals. For the remainder of this report, we denote
+\begin{equation}
+    Y_1 = \{-2=y_0, y_1, \ldots, y_{n_y/2}=0\}\subset [-2, 0]
+\end{equation}
+and
+\begin{equation}
+    Y_2 = \{0=y_{n_y/2}, y_{n_y/2+1}, \ldots, y_{n_y}=2\} \subset [0, 2].
+\end{equation}
+to be the sets of Chebyshev collocation points in ascending order for the two subintervals, and subsequently, for a given profile $U$, we define
+\begin{equation}\label{eq:U_1_U_2}
+    \mathbf{U}_1 = (U(y_0), \ldots, U(y_{n_y/2}))^t \in \mathbb{R}^{n_y/2+1} \quad \text{and} \quad \mathbf{U}_2 = (U(y_{n_y/2}), \ldots, U(y_{n_y}))^t \in \mathbb{R}^{n_y/2+1}.
+\end{equation}
+The corresponding derivative vectors $D\mathbf{U}_1 \in \mathbb{R}^{n_y/2+1}$ and $D \mathbf{U}_2 \in \mathbb{R}^{n_y/2+1}$ can then be computed via spectral differentiation, and, further, higher order derivatives can be obtained analogously through repeated application of the derivative operator.
+\begin{remark}
+    For notation clarity, the rest of the report uses zero indexing for vectors, e.g. $\mathbf{U}_1 $ in \eqref{eq:U_1_U_2} can equivalently be written as $\mathbf{U}_1 = ((\mathbf{U}_1)_0, (\mathbf{U}_1)_1, \ldots, (\mathbf{U}_1)_{n_y/2})^t \in \mathbb{R}^{n_y/2+1}$.
+\end{remark}
+
+On each open segment $(-2, 0)$ and $(0, 2)$, the solution $U$ remains smooth, allowing the spectral method to accurately capture its behavior within each piece. 
+This clustering property is also intuitive: because $y=0$ serves as the shared interface between the two subintervals, the Chebyshev points naturally accumulate near this nonsmooth region. As a result, we achieve enhanced resolution precisely where the solution demands finer discretization, allowing for more accurate representation and treatment of the challenging behavior near the origin. The advantage of this approach is illustrated in Figure~\ref{fig:deriv_comparison}, which compares the fourth derivative computed using three different methods: regular Chebyshev collocation on the full domain, piecewise Chebyshev collocation, and first-order finite differences. The plot clearly demonstrates that the piecewise method provides superior accuracy near the origin, where the fourth derivative becomes unbounded. The regular Chebyshev method struggles to capture this behavior due to its global smoothness assumption, while the piecewise approach naturally clusters points around the nonsmooth region, providing the necessary resolution to accurately represent the solution structure.
+
+\begin{figure}[tbhp]
+    \centering
+    \includegraphics[width=\textwidth]{images/deriv_exact_comparison.png}
+    \caption{Comparison of fourth derivative $U^{(4)}(y)$ computed using different differentiation methods for $\lambda = 0.4$ and $n_y = 128$ discretization points. The exact solution (black line) is computed using piecewise Chebyshev with 512 points. The plot demonstrates that the piecewise Chebyshev method provides superior accuracy near the origin, where the fourth derivative becomes unbounded.}
+    \label{fig:deriv_comparison}
+\end{figure}
+
+\subsection{Objective function and optimization}
+
+Rather than minimizing a weighted loss function that combines PDE residuals and boundary conditions as in the PINNS setting introduced in~\cite{wang2023asymptotic}, we formulate the problem as the root-finding of a certain vector function $\mathcal{L}: \mathbb{R}^{n_y/2+1} \times \mathbb{R}^{n_y/2+1} \to \mathbb{R}^{n_y+2}$ where $n_y$ is the resolution parameter introduced in the preceding section. In detail, the vector function $\mathcal{L}(\mathbf{U}_1, \mathbf{U}_2)$ is given by 
+\begin{equation}
+    \mathcal{L}(\mathbf{U}_1, \mathbf{U}_2) = 
+    \begin{pmatrix}
+        \mathcal{L}^{\textrm{PDE}}(\mathbf{U}_1)\\
+        \mathcal{L}^{\textrm{PDE}}(\mathbf{U}_2)\\
+        \mathcal{L}^{\textrm{BC}}(\mathbf{U}_1,\mathbf{U}_2)\\
+        \mathcal{L}^{\textrm{interface}}(\mathbf{U}_1, \mathbf{U}_2)\\
+    \end{pmatrix}
+\end{equation}
+where
+\begin{equation}
+    (\mathcal{L}^{\textrm{PDE}}(\mathbf{U}))_{i-1} = -\lambda (\mathbf{U})_i + ((1+\lambda)y_i + (\mathbf{U})_i)(D\mathbf{U})_i, \quad i = 1, 2, \ldots, n_y/2-1,
+\end{equation}
+\begin{equation}
+    (\mathcal{L}^{\textrm{BC}}(\mathbf{U}_1,\mathbf{U}_2))_{i} = 
+    \begin{cases}
+        (\mathbf{U}_1)_0 - 1, & i = 0, \\
+        (\mathbf{U}_2)_{n_y/2} - 1, & i = 1, \\
+    \end{cases}
+\end{equation}
+and
+\begin{equation}
+    (\mathcal{L}^{\textrm{interface}}(\mathbf{U}_1, \mathbf{U}_2))_{i} = 
+    \begin{cases}
+        (\mathbf{U}_1)_{n_y/2} - (\mathbf{U}_2)_{0}, & i = 0, \\
+        (D\mathbf{U}_1)_{n_y/2} - (D\mathbf{U}_2)_{0}, & i = 1.
+    \end{cases}
+\end{equation}
+In summary, these residuals enforce the boundary value problem within each subinterval, while simultaneously imposing continuity and flux matching conditions at the interface $y = 0$. This ensures both the solution and its first derivative are properly matched at the subdomain boundary, capturing the essential coupling between the two regions.
+
+To solve this system, we employ Newton-type methods (specifically, Powell's hybrid method) with the Jacobian computed exactly using automatic differentiation via JAX. Because convergence to the correct solution becomes more delicate at higher resolutions (larger $n_y$), we employ a multigrid-style strategy for constructing initial guesses. We first solve the system on a coarse grid, interpolate the solution onto a finer grid using piecewise linear interpolation, and use this interpolated solution as the initial guess for the solver at the increased resolution. Iterating this process from coarse to fine grids provides high-quality initial guesses, greatly improving convergence and robustness of the solver.
+
+\subsection{Fixed $\lambda$: numerical results}
+In this section, we present the effectiveness of the proposed method for solving the boundary value problem~\eqref{eq:bvp} for a fixed $\lambda$. We consider the non-smooth case where $\lambda = 0.4$ and the smooth case where $\lambda = 0.5$. and $n_y = 128$.
+
+
 
 \bibliographystyle{abbrv}
 \bibliography{references}
